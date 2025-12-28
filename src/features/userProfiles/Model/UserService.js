@@ -6,11 +6,12 @@ const API_URL = 'https://din-api-url.com/api';
 
 const UserService = {
   // Simulerad data för utvecklingsfasen (Steg 1-2)
+  // Uppdatering i UserService.js
   getMockProfiles: () => {
     return [
-      { id: 1, name: "Tränare Thomas", role: "coach", bio: "Huvudtränare för A-laget" },
-      { id: 2, name: "Spelare Erik", role: "athlete", team: "U19" },
-      { id: 3, name: "Dr. Andersson", role: "doctor", specialization: "Fysioterapi" }
+      { id: 1, name: "Anna Jönsson", age: 24, fitnessLevel: "Advanced", role: "athlete", bio: "Siktar på SM-guld." },
+      { id: 2, name: "Erik Kraft", age: 30, fitnessLevel: "Beginner", role: "athlete", bio: "Vill komma igång efter skada." },
+      { id: 3, name: "Coach Thomas", age: 45, fitnessLevel: "Elite", role: "coach", bio: "30 års erfarenhet." }
     ];
   },
 
@@ -22,7 +23,20 @@ const UserService = {
       // return response.data;
       return this.getMockProfiles();
     } catch (error) {
-      console.error("Kunde inte hämta profiler:", error);
+      console.error("Could not retrieve profile:", error);
+      throw error;
+    }
+  },
+  async createProfile(newProfileData) {
+    try {
+      // I framtiden: const response = await axios.post(`${API_URL}/profiles`, newProfileData);
+      // För nu simulerar vi att vi sparar och får tillbaka objektet med ett ID
+      return {
+        ...newProfileData,
+        id: Date.now() // Temporärt ID
+      };
+    } catch (error) {
+      console.error("Kunde inte skapa profil:", error);
       throw error;
     }
   },
@@ -38,7 +52,7 @@ const UserService = {
         }, 500);
       });
     } catch (error) {
-      console.error("Kunde inte hämta profil:", error);
+      console.error("Could not retrieve profile:", error);
     }
   },
 
@@ -53,7 +67,7 @@ const UserService = {
       });
       return response.data;
     } catch (error) {
-      console.error("Kunde inte spara feedback:", error);
+      console.error("Could not retrieve feedback:", error);
     }
   }
 };
