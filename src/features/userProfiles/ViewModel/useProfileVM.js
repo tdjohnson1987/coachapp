@@ -7,12 +7,25 @@ export const useProfileVM = () => {
   const [inspectedProfile, setInspectedProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ... din befintliga fetch-logik
+  const [error, setError] = useState(null);
 
   const addProfile = async (profileData) => {
-    const createdProfile = await UserService.createProfile(profileData);
-    setProfiles(prev => [...prev, createdProfile]);
+    try {
+      const createdProfile = await UserService.createProfile(profileData);
+      setProfiles(prev => [...prev, createdProfile]);
+    } catch (err) {
+      setError("Kunde inte spara profilen. Försök igen.");
+    }
   };
+  useEffect(() => {
+      const loadProfiles = async () => {
+          setLoading(true);
+          const data = await UserService.getAllProfiles();
+          setProfiles(data);
+          setLoading(false);
+      };
+      loadProfiles();
+  }, []);
 
   return {
     profiles,

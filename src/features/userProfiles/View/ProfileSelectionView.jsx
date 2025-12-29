@@ -1,68 +1,79 @@
-// src/features/userProfiles/View/ProfileSelectionView.jsx
 import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useProfileVM } from '../ViewModel/useProfileVM';
 
 const ProfileSelectionView = () => {
     const { profiles, inspectedProfile, loading, inspectProfile, closeInspection, addProfile } = useProfileVM();
     const [isCreating, setIsCreating] = useState(false);
-
-    // Lokalt state för formuläret
     const [formData, setFormData] = useState({ name: '', age: '', fitnessLevel: 'Beginner', role: 'athlete', bio: '' });
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleSubmit = async () => {
         await addProfile(formData);
         setIsCreating(false);
         setFormData({ name: '', age: '', fitnessLevel: 'Beginner', role: 'athlete', bio: '' });
     };
 
-    if (loading) return <div>Loading profiles...</div>;
+    if (loading && profiles.length === 0) return <Text>Laddar profiler...</Text>;
 
     return (
-        <div style={{ padding: '20px' }}>
-            <button onClick={() => setIsCreating(!isCreating)} style={{ marginBottom: '20px' }}>
-                {isCreating ? 'Avbryt' : '+ Skapa ny profil'}
-            </button>
+        <ScrollView style={styles.container}>
+            <TouchableOpacity onPress={() => setIsCreating(!isCreating)} style={styles.button}>
+                <Text style={styles.buttonText}>{isCreating ? 'Avbryt' : '+ Skapa ny profil'}</Text>
+            </TouchableOpacity>
 
             {isCreating && (
-                <form onSubmit={handleSubmit} style={{ marginBottom: '30px', padding: '20px', border: '2px solid #007bff', borderRadius: '8px' }}>
-                    <h3>Ny profil</h3>
-                    <input placeholder="Namn" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required /><br/>
-                    <input placeholder="Ålder" type="number" value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} required /><br/>
-                    <select value={formData.fitnessLevel} onChange={e => setFormData({...formData, fitnessLevel: e.target.value})}>
-                        <option value="Beginner">Beginner</option>
-                        <option value="Intermediate">Intermediate</option>
-                        <option value="Advanced">Advanced</option>
-                        <option value="Elite">Elite</option>
-                    </select><br/>
-                    <textarea placeholder="Kort biografi" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} /><br/>
-                    <button type="submit">Spara profil</button>
-                </form>
+                <View style={styles.form}>
+                    <Text style={styles.label}>Ny profil</Text>
+                    <TextInput 
+                        style={styles.input} 
+                        placeholder="Namn" 
+                        value={formData.name} 
+                        onChangeText={text => setFormData({...formData, name: text})} 
+                    />
+                    <TextInput 
+                        style={styles.input} 
+                        placeholder="Ålder" 
+                        keyboardType="numeric"
+                        value={formData.age} 
+                        onChangeText={text => setFormData({...formData, age: text})} 
+                    />
+                    {/* För enkelhets skull använder vi TextInput här, i RN använder man ofta en Picker-modul för dropdowns */}
+                    <TouchableOpacity onPress={handleSubmit} style={styles.saveButton}>
+                        <Text style={styles.buttonText}>Spara profil</Text>
+                    </TouchableOpacity>
+                </View>
             )}
 
-            <div style={{ display: 'flex', gap: '20px' }}>
-                {/* DETALJERAD INSPEKTION */}
-                <div style={{ flex: 2, border: '1px solid #eee', padding: '20px', borderRadius: '8px' }}>
-                    {inspectedProfile ? (
-                    <div>
-                        <button onClick={closeInspection}>Stäng x</button>
-                        <h1>{inspectedProfile.name}</h1>
-                        <hr />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                        <p><strong>Age:</strong> {inspectedProfile.age}</p>
-                        <p><strong>Level:</strong> {inspectedProfile.fitnessLevel}</p>
-                        <p><strong>Role:</strong> {inspectedProfile.role}</p>
-                        </div>
-                        <h3>Biography</h3>
-                        <p>{inspectedProfile.bio}</p>
-                    </div>
-                    ) : (
-                    <div style={{ color: '#999', textAlign: 'center', marginTop: '50px' }}>
-                        Click on the profile to see more info
-                    </div>
-                    )}
-                </div>
-            </div>
-        </div>
+            {/* Lista på profiler */}
+            {profiles.map(profile => (
+                <TouchableOpacity key={profile.id} onPress={() => inspectProfile(profile.id)} style={styles.profileCard}>
+                    <Text>{profile.name} ({profile.fitnessLevel})</Text>
+                </TouchableOpacity>
+            ))}
+
+            {/* Detaljvy */}
+            {inspectedProfile && (
+                <View style={styles.modal}>
+                    <TouchableOpacity onPress={closeInspection}><Text>Stäng X</Text></TouchableOpacity>
+                    <Text style={styles.title}>{inspectedProfile.name}</Text>
+                    <Text>Ålder: {inspectedProfile.age}</Text>
+                    <Text>Nivå: {inspectedProfile.fitnessLevel}</Text>
+                    <Text>{inspectedProfile.bio}</Text>
+                </View>
+            )}
+        </ScrollView>
     );
 };
+
+const styles = StyleSheet.create({
+    container: { padding: 20, paddingTop: 50 },
+    button: { backgroundColor: '#007bff', padding: 10, borderRadius: 5, marginBottom: 10 },
+    saveButton: { backgroundColor: 'green', padding: 10, borderRadius: 5, marginTop: 10 },
+    buttonText: { color: 'white', textAlign: 'center' },
+    input: { borderBottomWidth: 1, marginBottom: 15, padding: 5 },
+    profileCard: { padding: 15, backgroundColor: '#f9f9f9', marginBottom: 5, borderRadius: 5 },
+    form: { padding: 15, borderColor: '#007bff', borderWidth: 1, borderRadius: 10, marginBottom: 20 },
+    title: { fontSize: 24, fontWeight: 'bold' }
+});
+
+export default ProfileSelectionView;
