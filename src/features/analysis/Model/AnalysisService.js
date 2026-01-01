@@ -14,6 +14,9 @@ const AnalysisService = {
 
   async extractPreviewFrames({ videoFile, frameCount = 6 }) {
     // Här kan du senare implementera <video> + <canvas>
+    const videoDuration = 30; // Anta 30 sekunder för nu (ersätt med riktig duration)
+    const interval = videoDuration / frameCount;    
+
     // För nu: returnera mock-data
     const frames = [];
     for (let i = 0; i < frameCount; i++) {
