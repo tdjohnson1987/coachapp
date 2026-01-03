@@ -6,15 +6,22 @@ import HomeView from './src/features/home/HomeView';
 import ProfileSelectionView from './src/features/userProfiles/View/ProfileSelectionView';
 import ProfileView from './src/features/userProfiles/View/ProfileView';
 
-// If you already have these, import them instead of the placeholders
 import VideoAnalyzerView from './src/features/analysis/View/VideoAnalyserView';
 import ReportGeneratorView from './src/features/analysis/View/ReportGeneratorView';
+import { useAnalysisVM } from './src/features/analysis/ViewModel/useAnalysisVM';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('Home'); // start on Home
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // create analysis VM ONCE per app render, not inside JSX
+  const analysisVM = useAnalysisVM({
+    coachId: 1,
+    athleteId: 2,
+    sport: 'football',
+  });
 
   // 1. Load profiles from storage on app start
   useEffect(() => {
@@ -95,11 +102,11 @@ export default function App() {
       )}
 
       {currentScreen === 'VideoAnalysis' && (
-        <VideoAnalyzerView />
+        <VideoAnalyzerView navigation={{ navigate }} vm={analysisVM} />
       )}
 
       {currentScreen === 'ReportGenerator' && (
-        <ReportGeneratorView />
+        <ReportGeneratorView navigation={{ navigate }} vm={analysisVM} />
       )}
     </View>
   );

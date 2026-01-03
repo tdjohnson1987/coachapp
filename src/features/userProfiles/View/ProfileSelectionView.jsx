@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Modal, Image, Dimensions } from 'react-native';
+import { View, 
+    Text, 
+    TextInput, 
+    TouchableOpacity, 
+    ScrollView, 
+    StyleSheet, 
+    Modal, 
+    Image, 
+    Dimensions, 
+    navigation } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { User, Camera, Plus, X } from 'lucide-react-native';
 
@@ -39,9 +48,19 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
     return (
         <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
             <View style={styles.headerRow}>
+                {/* Left: Home */}
+                <TouchableOpacity onPress={() => navigation.navigate('Home')}>
+                <Text style={{ color: '#007AFF', fontWeight: '700', fontSize: 16 }}>
+                    Home
+                </Text>
+                </TouchableOpacity>
+
+                {/* Center: title */}
                 <Text style={styles.header}>Mina Profiler</Text>
+
+                {/* Right: + */}
                 <TouchableOpacity style={styles.iconAdd} onPress={() => setIsCreating(true)}>
-                    <Plus color="#007AFF" size={28} />
+                <Plus color="#007AFF" size={28} />
                 </TouchableOpacity>
             </View>
 
