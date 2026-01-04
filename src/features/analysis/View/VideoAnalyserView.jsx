@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   FlatList,
   PanResponder,
+  Platform,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Video } from 'expo-av';
@@ -29,6 +30,8 @@ const VideoAnalyzerView = ({ navigation, vm }) => {
   const videoRef = useRef(null);
   const [currentStroke, setCurrentStroke] = useState(null);
   const [strokes, setStrokes] = useState([]);
+  const [isPlaying, setIsPlaying] = useState(false);
+
 
   const panResponder = useRef(
     PanResponder.create({
@@ -66,6 +69,16 @@ const VideoAnalyzerView = ({ navigation, vm }) => {
     if (result.canceled) return;
 
     const file = result.assets[0];
+
+    // Stoppa tidigare video och rensa ritning när ny video väljs
+    try {
+      await videoRef.current?.stopAsync?.();
+    } catch (e) {
+      // ignoreras om ingen video körs
+    }
+    setStrokes([]);
+    setCurrentStroke(null);
+
     await loadVideo({
       uri: file.uri,
       name: file.name,
@@ -132,17 +145,54 @@ const VideoAnalyzerView = ({ navigation, vm }) => {
           <View style={styles.videoWrapper}>
             {videoFile ? (
               <>
-                <Video
-                  ref={videoRef}
-                  source={{ uri: videoFile.uri }}
-                  style={styles.video}
-                  useNativeControls
-                  resizeMode="contain"
-                />
+                {Platform.OS === 'web' ? (
+                  <View style={{ flex: 1 }}>
+                    {!isPlaying ? (
+                      <>
+                        <video
+                          src={videoFile.uri}
+                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          preload="metadata"
+                        />
+                        <TouchableOpacity
+                          style={styles.playOverlay}
+                          onPress={() => setIsPlaying(true)}
+                        >
+                          <Ionicons name="play-circle" size={72} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <video
+                        src={videoFile.uri}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        controls
+                        autoPlay
+                      />
+                    )}
+                  </View>
+                ) : (
+                  <>
+                    <Video
+                      ref={videoRef}
+                      source={{ uri: videoFile.uri }}
+                      style={styles.video}
+                      resizeMode="contain"
+                      useNativeControls={isPlaying}
+                      shouldPlay={isPlaying}
+                    />
+                    {!isPlaying && (
+                      <TouchableOpacity
+                        style={styles.playOverlay}
+                        onPress={() => setIsPlaying(true)}
+                      >
+                        <Ionicons name="play-circle" size={72} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+
                 <View style={styles.drawingOverlay} {...panResponder.panHandlers}>
-                  <Text style={styles.overlayInfo}>
-                    Linjer: {strokes.length}
-                  </Text>
+                  <Text style={styles.overlayInfo}>Linjer: {strokes.length}</Text>
                 </View>
               </>
             ) : (
@@ -154,6 +204,9 @@ const VideoAnalyzerView = ({ navigation, vm }) => {
               </View>
             )}
           </View>
+
+
+
 
           <View style={styles.inlineRow}>
             <Text style={styles.metaText}>
@@ -317,7 +370,15 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   statusText: { fontSize: 14, color: '#343A40', marginTop: 2 },
+
   errorText: { fontSize: 14, color: '#DC3545', marginTop: 4 },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+
 });
 
 export default VideoAnalyzerView;
