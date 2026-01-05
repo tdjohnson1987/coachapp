@@ -10,6 +10,9 @@ import VideoAnalyzerView from './src/features/analysis/View/VideoAnalyserView';
 import ReportGeneratorView from './src/features/analysis/View/ReportGeneratorView';
 import { useAnalysisVM } from './src/features/analysis/ViewModel/useAnalysisVM';
 
+import CaptureScreen from './src/features/capture/View/CaptureScreen';
+
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('Home'); // start on Home
   const [selectedProfile, setSelectedProfile] = useState(null);
@@ -108,6 +111,11 @@ export default function App() {
       {currentScreen === 'ReportGenerator' && (
         <ReportGeneratorView navigation={{ navigate }} vm={analysisVM} />
       )}
+
+      {currentScreen === 'Capture' && (
+        <CaptureScreen navigation={{ navigate }} />
+      )}
+
     </View>
   );
 }

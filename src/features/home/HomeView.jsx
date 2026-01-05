@@ -24,6 +24,13 @@ const HomeView = ({ navigate }) => {
         />
         <View style={styles.spacer} />
         <Button
+          title="Rita på plan/stillbild"
+          onPress={() => navigate('Capture')}
+          color="#007AFF"
+        />
+        <View style={styles.spacer} />
+
+        <Button
           title="Rapportgenerator"
           onPress={() => navigate('ReportGenerator')}
           color="#007AFF"
