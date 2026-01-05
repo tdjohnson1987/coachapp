@@ -15,13 +15,22 @@ const CaptureScreen = ({ navigation }) => {
 
     // Inspelning: spela in tidsstämplar när man ritar
     const [isRecording, setIsRecording] = useState(false);
-    const [recordedStrokes, setRecordedStrokes] = useState([]); // samma format, men med t
+    const isRecordingRef = useRef(false);
+    const [recordedStrokes, setRecordedStrokes] = useState([]); // Ta bort??
     const recordStartRef = useRef(0);
 
     // Playback
     const [isPlaying, setIsPlaying] = useState(false);
     const [playheadMs, setPlayheadMs] = useState(0);
     const playTimerRef = useRef(null);
+    const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
+
+    //HÄR??
+    const currentStrokeRef = useRef(null);
+    const [recordingBaseStrokes, setRecordingBaseStrokes] = useState([]);
+
+
+
 
 
     const builtInPlans = useMemo(
@@ -35,7 +44,7 @@ const CaptureScreen = ({ navigation }) => {
     );
 
 
-    const [selectedPlanId, setSelectedPlanId] = useState("football");
+    const [selectedPlanId, setSelectedPlanId] = useState("fotball");
     const [customImageUri, setCustomImageUri] = useState(null);
 
     const activeImageSource = customImageUri
@@ -60,68 +69,83 @@ const CaptureScreen = ({ navigation }) => {
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+
             onPanResponderGrant: (evt) => {
                 const { locationX, locationY } = evt.nativeEvent;
                 const now = Date.now();
 
                 const stroke = {
                     id: now,
-                    points: [
-                        {
-                            x: locationX,
-                            y: locationY,
-                            t: isRecording ? now - recordStartRef.current : 0,
-                        },
-                    ],
+                    points: [{
+                        x: locationX,
+                        y: locationY,
+                        t: isRecordingRef.current ? now - recordStartRef.current : 0, // <-- ÄNDRAD
+                    }],
                 };
+
+                currentStrokeRef.current = stroke;
                 setCurrentStroke(stroke);
             },
+
             onPanResponderMove: (evt) => {
-                if (!currentStroke) return;
+                const stroke = currentStrokeRef.current;
+                if (!stroke) return;
+
                 const { locationX, locationY } = evt.nativeEvent;
                 const now = Date.now();
-                setCurrentStroke((prev) => ({
-                    ...prev,
-                    points: [
-                        ...prev.points,
-                        {
-                            x: locationX,
-                            y: locationY,
-                            t: isRecording ? now - recordStartRef.current : 0,
-                        },
-                    ],
-                }));
+
+                const nextPoint = {
+                    x: locationX,
+                    y: locationY,
+                    t: isRecordingRef.current ? now - recordStartRef.current : 0, // <-- ÄNDRAD
+                };
+
+                const updated = { ...stroke, points: [...stroke.points, nextPoint] };
+                currentStrokeRef.current = updated;
+                setCurrentStroke(updated);
             },
+
             onPanResponderRelease: () => {
-                if (!currentStroke) return;
+                const stroke = currentStrokeRef.current;
+                if (!stroke) return;
 
-                setStrokes((prev) => [...prev, currentStroke]);
+                setStrokes((prev) => [...prev, stroke]);
 
-                // Om inspelning på: spara stroke med timestamps
-                if (isRecording) {
-                    setRecordedStrokes((prev) => [...prev, currentStroke]);
+                if (isRecordingRef.current) { // <-- ÄNDRAD
+                    setRecordedStrokes((prev) => [...prev, stroke]);
                 }
 
+                currentStrokeRef.current = null;
                 setCurrentStroke(null);
             },
+
         })
     ).current;
+
 
     const handleClear = () => {
         setStrokes([]);
         setCurrentStroke(null);
+        currentStrokeRef.current = null;
         setRecordedStrokes([]);
         stopPlayback();
     };
 
     const startRecording = () => {
         stopPlayback();
+
+        setRecordingBaseStrokes(strokes);
         setRecordedStrokes([]);
+
         recordStartRef.current = Date.now();
+        isRecordingRef.current = true;
         setIsRecording(true);
     };
 
+
     const stopRecording = () => {
+        isRecordingRef.current = false;
         setIsRecording(false);
     };
 
@@ -159,8 +183,8 @@ const CaptureScreen = ({ navigation }) => {
     };
 
     // Under playback visar vi bara punkter <= playheadMs
-    const visibleStrokes = useMemo(() => {
-        if (!isPlaying) return strokes;
+    const visibleRecorded = useMemo(() => {
+        if (!isPlaying) return [];
 
         return recordedStrokes
             .map((s) => ({
@@ -168,11 +192,15 @@ const CaptureScreen = ({ navigation }) => {
                 points: s.points.filter((p) => p.t <= playheadMs),
             }))
             .filter((s) => s.points.length >= 2);
-    }, [isPlaying, playheadMs, recordedStrokes, strokes]);
+    }, [isPlaying, playheadMs, recordedStrokes]);
 
-    const allToRender = currentStroke
-        ? [...visibleStrokes, currentStroke]
-        : visibleStrokes;
+    const baseToRender = isPlaying ? recordingBaseStrokes : strokes;
+
+    const allToRender = useMemo(() => {
+        const layers = isPlaying ? [...baseToRender, ...visibleRecorded] : baseToRender;
+        return currentStroke ? [...layers, currentStroke] : layers;
+    }, [isPlaying, baseToRender, visibleRecorded, currentStroke]);
+
 
     return (
         <View style={styles.container}>
@@ -215,19 +243,35 @@ const CaptureScreen = ({ navigation }) => {
                 </Text>
 
 
-                <View style={styles.pitchWrapper} {...panResponder.panHandlers}>
-                    {/* Bakgrundsbild (plan eller uppladdad bild) */}
+                <View
+                    style={styles.pitchWrapper}
+                    onLayout={(e) => {
+                        const { width, height } = e.nativeEvent.layout;
+                        setCanvasSize({ w: width || 1, h: height || 1 });
+                    }}
+                    {...panResponder.panHandlers}
+                >
+                    {/* Bakgrund */}
                     {activeImageSource ? (
-                        <Image source={activeImageSource} style={styles.bgImage} resizeMode="contain" />
+                        <Image
+                            source={activeImageSource}
+                            style={styles.bgImage}
+                            resizeMode="contain"
+                            pointerEvents="none"
+                        />
                     ) : (
-                        <View style={styles.noImage}>
+                        <View style={styles.noImage} pointerEvents="none">
                             <Ionicons name="image-outline" size={40} color="#ADB5BD" />
                             <Text style={styles.noImageText}>Välj en plan eller ladda upp en bild</Text>
                         </View>
                     )}
 
-                    {/* Rit-overlay (ligger ovanpå bilden) */}
-                    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 1000 562">
+                    {/* Rit-overlay (alltid ovanpå) */}
+                    <Svg
+                        style={StyleSheet.absoluteFill}
+                        viewBox={`0 0 ${canvasSize.w} ${canvasSize.h}`}
+                        pointerEvents="none"
+                    >
                         {allToRender.map((s) => (
                             <Polyline
                                 key={s.id}
@@ -241,12 +285,13 @@ const CaptureScreen = ({ navigation }) => {
                         ))}
                     </Svg>
 
-                    <View style={styles.overlayInfo}>
+                    <View style={styles.overlayInfo} pointerEvents="none">
                         <Text style={styles.overlayText}>
-                            Linjer: {strokes.length} {isRecording ? "• REC" : ""} {isPlaying ? "• PLAY" : ""}
+                            {isRecording ? "• REC" : ""} {isPlaying ? "• PLAY" : ""}
                         </Text>
                     </View>
                 </View>
+
 
 
                 {/* Controls */}
