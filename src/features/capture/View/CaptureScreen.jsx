@@ -36,13 +36,14 @@ const CaptureScreen = ({ navigation }) => {
     const [audioUri, setAudioUri] = useState(null);
 
 
-
-
-
     const builtInPlans = useMemo(
         () => [
             { id: "fotboll", label: "Fotboll", src: require("../../../assets/fields/fotball.jpg") },
             { id: "handboll", label: "Handboll", src: require("../../../assets/fields/handball.jpg") },
+            { id: "hockey", label: "Hockey", src: require("../../../assets/fields/hockey.jpg") },
+            { id: "basketball", label: "Basket", src: require("../../../assets/fields/basketball.jpg") },
+            { id: "tom", label: "Tom", src: require("../../../assets/fields/tom.jpg") },
+
             // Lägg INTE basket förrän filen finns
             // { id: "basket", label: "Basket", src: require("../../../assets/fields/basket.jpg") },
         ],
