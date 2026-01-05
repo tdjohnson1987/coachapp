@@ -82,6 +82,63 @@ const CaptureScreen = ({ navigation }) => {
     };
 
 
+    const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
+
+    const pointToSegmentDist = (px, py, x1, y1, x2, y2) => {
+        const vx = x2 - x1;
+        const vy = y2 - y1;
+        const wx = px - x1;
+        const wy = py - y1;
+
+        const c1 = vx * wx + vy * wy;
+        if (c1 <= 0) return dist(px, py, x1, y1);
+
+        const c2 = vx * vx + vy * vy;
+        if (c2 <= c1) return dist(px, py, x2, y2);
+
+        const t = c1 / c2;
+        const projX = x1 + t * vx;
+        const projY = y1 + t * vy;
+        return dist(px, py, projX, projY);
+    };
+
+    const isHitStroke = (s, x, y, threshold) => {
+        const type = s.type || "pen";
+
+        if (type === "pen") {
+            const pts = s.points || [];
+            for (let i = 0; i < pts.length; i++) {
+                if (dist(x, y, pts[i].x, pts[i].y) <= threshold) return true;
+            }
+            return false;
+        }
+
+        if (type === "line" || type === "arrow") {
+            return pointToSegmentDist(x, y, s.x1, s.y1, s.x2, s.y2) <= threshold;
+        }
+
+        if (type === "circle") {
+            const d = dist(x, y, s.cx, s.cy);
+            // nära själva cirkel-linjen
+            return Math.abs(d - s.r) <= threshold;
+        }
+
+        return false;
+    };
+
+    const eraseAt = (x, y) => {
+        // Känn av lite större än linjetjockleken
+        const threshold = Math.max(12, strokeWidthRef.current * 3);
+
+        setStrokes((prev) => prev.filter((s) => !isHitStroke(s, x, y, threshold)));
+
+        // Om du vill att sudd även ska påverka inspelningen:
+        setRecordedStrokes((prev) => prev.filter((s) => !isHitStroke(s, x, y, threshold)));
+    };
+
+
+
+
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
@@ -216,7 +273,7 @@ const CaptureScreen = ({ navigation }) => {
                     return;
                 }
 
-                //cirkel
+                // CIRKEL: uppdatera radie
                 if (stroke.type === "circle") {
                     const dx = locationX - stroke.cx;
                     const dy = locationY - stroke.cy;
@@ -228,7 +285,7 @@ const CaptureScreen = ({ navigation }) => {
                     return;
                 }
 
-                //pil
+                // PIL: uppdatera slutpunkt
                 if (stroke.type === "arrow") {
                     const updated = { ...stroke, x2: locationX, y2: locationY };
                     currentStrokeRef.current = updated;
@@ -236,8 +293,9 @@ const CaptureScreen = ({ navigation }) => {
                     return;
                 }
 
-
+                // (om du fortfarande har eraser-knappen just nu: ta bort den delen om du vill skippa den)
             },
+
 
             onPanResponderRelease: () => {
                 const stroke = currentStrokeRef.current;
@@ -304,6 +362,18 @@ const CaptureScreen = ({ navigation }) => {
         stopPlayback();
         setAudioUri(null);
     };
+
+    const handleUndo = () => {
+        // Avbryt ev “pågående stroke”
+        setCurrentStroke(null);
+        currentStrokeRef.current = null;
+
+        setStrokes((prev) => prev.slice(0, -1));
+
+        // Om du vill att "undo" även påverkar inspelningen:
+        setRecordedStrokes((prev) => prev.slice(0, -1));
+    };
+
 
     const startRecording = async () => {
         stopPlayback();
@@ -569,6 +639,12 @@ const CaptureScreen = ({ navigation }) => {
                         >
                             <Ionicons name="arrow-forward" size={18} color={tool === "arrow" ? "#FFF" : "#1A1A1A"} />
                         </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.toolBtn} onPress={handleUndo}>
+                            <Ionicons name="arrow-undo" size={18} color="#1A1A1A" />
+                        </TouchableOpacity>
+
+
                     </View>
 
                     {/* Rad 2: tjocklek */}
