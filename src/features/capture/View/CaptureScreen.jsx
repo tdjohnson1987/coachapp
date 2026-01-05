@@ -1,13 +1,9 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
-
-
-// OBS: Om du har react-native-svg installerat (vanligt i Expo) får du snygga linjer.
-// Om den saknas: kör `npx expo install react-native-svg`
-import Svg, { Polyline } from "react-native-svg";
+import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
 
 const CaptureScreen = ({ navigation }) => {
     // Ritdata: varje stroke = lista av punkter {x,y} och ev timestamp
@@ -32,23 +28,39 @@ const CaptureScreen = ({ navigation }) => {
 
     const audioRecordingRef = useRef(null);
     const audioSoundRef = useRef(null);
-
     const [audioUri, setAudioUri] = useState(null);
+
+    const [tool, setTool] = useState("pen");
+    const [color, setColor] = useState("#FFFFFF");
+    const [strokeWidth, setStrokeWidth] = useState(4);
+    const [circleRadius, setCircleRadius] = useState(14);
+
+    const toolRef = useRef(tool);
+    const colorRef = useRef(color);
+    const strokeWidthRef = useRef(strokeWidth);
+    const circleRadiusRef = useRef(circleRadius);
+
+    useEffect(() => { toolRef.current = tool; }, [tool]);
+    useEffect(() => { colorRef.current = color; }, [color]);
+    useEffect(() => { strokeWidthRef.current = strokeWidth; }, [strokeWidth]);
+    useEffect(() => { circleRadiusRef.current = circleRadius; }, [circleRadius]);
+
+
 
 
     const builtInPlans = useMemo(
         () => [
-            { id: "fotboll", label: "Fotboll", src: require("../../../assets/fields/fotball.jpg") },
+            { id: "tom", label: "Tom", src: require("../../../assets/fields/tom.jpg") },
+            { id: "fotball", label: "Fotboll", src: require("../../../assets/fields/fotball.jpg") },
             { id: "handboll", label: "Handboll", src: require("../../../assets/fields/handball.jpg") },
             { id: "hockey", label: "Hockey", src: require("../../../assets/fields/hockey.jpg") },
             { id: "basketball", label: "Basket", src: require("../../../assets/fields/basketball.jpg") },
-            { id: "tom", label: "Tom", src: require("../../../assets/fields/tom.jpg") },
         ],
         []
     );
 
 
-    const [selectedPlanId, setSelectedPlanId] = useState("fotball");
+    const [selectedPlanId, setSelectedPlanId] = useState("tom");
     const [customImageUri, setCustomImageUri] = useState(null);
 
     const activeImageSource = customImageUri
@@ -79,18 +91,102 @@ const CaptureScreen = ({ navigation }) => {
                 const { locationX, locationY } = evt.nativeEvent;
                 const now = Date.now();
 
-                const stroke = {
-                    id: now,
-                    points: [{
-                        x: locationX,
-                        y: locationY,
-                        t: isRecordingRef.current ? now - recordStartRef.current : 0, // <-- ÄNDRAD
-                    }],
-                };
+                const activeTool = toolRef.current;
+                const activeColor = colorRef.current;
+                const activeWidth = strokeWidthRef.current;
+                const activeRadius = circleRadiusRef.current;
 
-                currentStrokeRef.current = stroke;
-                setCurrentStroke(stroke);
+                // ======================
+                // PENNA 
+                // ======================
+                if (activeTool === "pen") {
+                    const stroke = {
+                        id: now,
+                        type: "pen",
+                        color: activeColor,
+                        width: activeWidth,
+                        points: [
+                            {
+                                x: locationX,
+                                y: locationY,
+                                t: isRecordingRef.current
+                                    ? now - recordStartRef.current
+                                    : 0,
+                            },
+                        ],
+                    };
+
+                    currentStrokeRef.current = stroke;
+                    setCurrentStroke(stroke);
+                    return;
+                }
+
+                // ======================
+                // LINJE 
+                // ======================
+                if (activeTool === "line") {
+                    const stroke = {
+                        id: now,
+                        type: "line",
+                        color: activeColor,
+                        width: activeWidth,
+                        x1: locationX,
+                        y1: locationY,
+                        x2: locationX,
+                        y2: locationY,
+                        t: 0, // sätts vid release
+                    };
+
+                    currentStrokeRef.current = stroke;
+                    setCurrentStroke(stroke);
+                    return;
+                }
+
+                // ======================
+                // CIRKEL 
+                // ======================
+                if (activeTool === "circle") {
+                    const t = isRecordingRef.current ? now - recordStartRef.current : 0;
+
+                    const stroke = {
+                        id: now,
+                        type: "circle",
+                        color: activeColor,
+                        width: activeWidth,
+                        cx: locationX,
+                        cy: locationY,
+                        r: 0,     // börjar på 0, byggs upp när du drar
+                        t,
+                    };
+
+                    currentStrokeRef.current = stroke;
+                    setCurrentStroke(stroke);
+                    return;
+                }
+
+                //pil
+
+                if (activeTool === "arrow") {
+                    const stroke = {
+                        id: now,
+                        type: "arrow",
+                        color: activeColor,
+                        width: activeWidth,
+                        x1: locationX,
+                        y1: locationY,
+                        x2: locationX,
+                        y2: locationY,
+                        t: 0,
+                    };
+
+                    currentStrokeRef.current = stroke;
+                    setCurrentStroke(stroke);
+                    return;
+                }
+
+
             },
+
 
             onPanResponderMove: (evt) => {
                 const stroke = currentStrokeRef.current;
@@ -99,33 +195,105 @@ const CaptureScreen = ({ navigation }) => {
                 const { locationX, locationY } = evt.nativeEvent;
                 const now = Date.now();
 
-                const nextPoint = {
-                    x: locationX,
-                    y: locationY,
-                    t: isRecordingRef.current ? now - recordStartRef.current : 0, // <-- ÄNDRAD
-                };
+                // PENNA: lägg till punkt
+                if (stroke.type === "pen") {
+                    const nextPoint = {
+                        x: locationX,
+                        y: locationY,
+                        t: isRecordingRef.current ? now - recordStartRef.current : 0,
+                    };
+                    const updated = { ...stroke, points: [...stroke.points, nextPoint] };
+                    currentStrokeRef.current = updated;
+                    setCurrentStroke(updated);
+                    return;
+                }
 
-                const updated = { ...stroke, points: [...stroke.points, nextPoint] };
-                currentStrokeRef.current = updated;
-                setCurrentStroke(updated);
+                // LINJE: uppdatera slutpunkt
+                if (stroke.type === "line") {
+                    const updated = { ...stroke, x2: locationX, y2: locationY };
+                    currentStrokeRef.current = updated;
+                    setCurrentStroke(updated);
+                    return;
+                }
+
+                //cirkel
+                if (stroke.type === "circle") {
+                    const dx = locationX - stroke.cx;
+                    const dy = locationY - stroke.cy;
+                    const r = Math.sqrt(dx * dx + dy * dy);
+
+                    const updated = { ...stroke, r };
+                    currentStrokeRef.current = updated;
+                    setCurrentStroke(updated);
+                    return;
+                }
+
+                //pil
+                if (stroke.type === "arrow") {
+                    const updated = { ...stroke, x2: locationX, y2: locationY };
+                    currentStrokeRef.current = updated;
+                    setCurrentStroke(updated);
+                    return;
+                }
+
+
             },
 
             onPanResponderRelease: () => {
                 const stroke = currentStrokeRef.current;
                 if (!stroke) return;
 
-                setStrokes((prev) => [...prev, stroke]);
+                const now = Date.now();
 
-                if (isRecordingRef.current) { // <-- ÄNDRAD
-                    setRecordedStrokes((prev) => [...prev, stroke]);
+                // PENNA: spara
+                if (stroke.type === "pen") {
+                    setStrokes((prev) => [...prev, stroke]);
+                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, stroke]);
                 }
+
+                // LINJE: sätt timestamp vid release och spara
+                if (stroke.type === "line") {
+                    const t = isRecordingRef.current ? now - recordStartRef.current : 0;
+                    const finalized = { ...stroke, t };
+                    setStrokes((prev) => [...prev, finalized]);
+                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, finalized]);
+                }
+
+                //cirkel
+                if (stroke.type === "circle") {
+                    const MIN_R = 3; // så att man inte råkar lägga en “prick”
+
+                    if ((stroke.r ?? 0) >= MIN_R) {
+                        setStrokes((prev) => [...prev, stroke]);
+                        if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, stroke]);
+                    }
+
+                    currentStrokeRef.current = null;
+                    setCurrentStroke(null);
+                    return;
+                }
+
+                ///pil
+                if (stroke.type === "arrow") {
+                    const t = isRecordingRef.current ? now - recordStartRef.current : 0;
+                    const finalized = { ...stroke, t };
+
+                    setStrokes((prev) => [...prev, finalized]);
+                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, finalized]);
+
+                    currentStrokeRef.current = null;
+                    setCurrentStroke(null);
+                    return;
+                }
+
+
 
                 currentStrokeRef.current = null;
                 setCurrentStroke(null);
             },
-
         })
     ).current;
+
 
 
     const handleClear = () => {
@@ -250,23 +418,77 @@ const CaptureScreen = ({ navigation }) => {
     const getEndMs = (strokesArr) => {
         let max = 0;
         for (const s of strokesArr) {
-            const last = s.points[s.points.length - 1];
-            if (last?.t > max) max = last.t;
+            const type = s.type || "pen";
+
+            if (type === "pen") {
+                const last = s.points?.[s.points.length - 1];
+                if (last?.t > max) max = last.t;
+            } else {
+                // line/circle har t direkt
+                if ((s.t ?? 0) > max) max = s.t ?? 0;
+            }
         }
         return max;
     };
+
+
+    const getArrowHead = (x1, y1, x2, y2, w) => {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        // unit vector
+        const ux = dx / len;
+        const uy = dy / len;
+
+        // storlek på pilspets (skalar med tjocklek)
+        const headLen = Math.max(10, w * 4);
+        const headWidth = Math.max(8, w * 3);
+
+        // baspunkt för pilspetsen (lite bak från spetsen)
+        const bx = x2 - ux * headLen;
+        const by = y2 - uy * headLen;
+
+        // normal (90 grader)
+        const nx = -uy;
+        const ny = ux;
+
+        const leftX = bx + nx * (headWidth / 2);
+        const leftY = by + ny * (headWidth / 2);
+        const rightX = bx - nx * (headWidth / 2);
+        const rightY = by - ny * (headWidth / 2);
+
+        // triangel: left -> tip -> right
+        return `${leftX},${leftY} ${x2},${y2} ${rightX},${rightY}`;
+    };
+
+
+
 
     // Under playback visar vi bara punkter <= playheadMs
     const visibleRecorded = useMemo(() => {
         if (!isPlaying) return [];
 
         return recordedStrokes
-            .map((s) => ({
-                ...s,
-                points: s.points.filter((p) => p.t <= playheadMs),
-            }))
-            .filter((s) => s.points.length >= 2);
+            .map((s) => {
+                const type = s.type || "pen";
+
+                // PENNA: filtrera punkter
+                if (type === "pen") {
+                    return {
+                        ...s,
+                        type,
+                        points: (s.points || []).filter((p) => p.t <= playheadMs),
+                    };
+                }
+
+                // LINJE/CIRKEL: visa när deras "t" har passerats
+                return s.t <= playheadMs ? { ...s, type } : null;
+            })
+            .filter(Boolean)
+            .filter((s) => (s.type === "pen" ? (s.points?.length ?? 0) >= 2 : true));
     }, [isPlaying, playheadMs, recordedStrokes]);
+
 
     const baseToRender = isPlaying ? recordingBaseStrokes : strokes;
 
@@ -317,6 +539,69 @@ const CaptureScreen = ({ navigation }) => {
                 </Text>
 
 
+                <View style={styles.toolbar}>
+                    {/* Rad 1: verktyg */}
+                    <View style={styles.toolRow}>
+                        <TouchableOpacity
+                            style={[styles.toolBtn, tool === "pen" && styles.toolBtnActive]}
+                            onPress={() => setTool("pen")}
+                        >
+                            <Ionicons name="pencil" size={18} color={tool === "pen" ? "#FFF" : "#1A1A1A"} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.toolBtn, tool === "line" && styles.toolBtnActive]}
+                            onPress={() => setTool("line")}
+                        >
+                            <Ionicons name="remove" size={22} color={tool === "line" ? "#FFF" : "#1A1A1A"} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.toolBtn, tool === "circle" && styles.toolBtnActive]}
+                            onPress={() => setTool("circle")}
+                        >
+                            <Ionicons name="ellipse-outline" size={18} color={tool === "circle" ? "#FFF" : "#1A1A1A"} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.toolBtn, tool === "arrow" && styles.toolBtnActive]}
+                            onPress={() => setTool("arrow")}
+                        >
+                            <Ionicons name="arrow-forward" size={18} color={tool === "arrow" ? "#FFF" : "#1A1A1A"} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Rad 2: tjocklek */}
+                    <View style={styles.thicknessRow}>
+                        <TouchableOpacity style={styles.smallBtn} onPress={() => setStrokeWidth((v) => Math.max(2, v - 1))}>
+                            <Text style={styles.smallBtnText}>−</Text>
+                        </TouchableOpacity>
+
+                        <Text style={styles.thicknessText}>{strokeWidth}px</Text>
+
+                        <TouchableOpacity style={styles.smallBtn} onPress={() => setStrokeWidth((v) => Math.min(12, v + 1))}>
+                            <Text style={styles.smallBtnText}>+</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Färger */}
+                    <View style={styles.colorRow}>
+                        {["#FFFFFF", "#FF3B30", "#34C759", "#007AFF", "#FFCC00", "#AF52DE", "#000000"].map((c) => (
+                            <TouchableOpacity
+                                key={c}
+                                onPress={() => setColor(c)}
+                                style={[
+                                    styles.colorDot,
+                                    { backgroundColor: c },
+                                    color === c && styles.colorDotActive,
+                                    c === "#FFFFFF" && { borderWidth: 1, borderColor: "#CED4DA" },
+                                ]}
+                            />
+                        ))}
+                    </View>
+                </View>
+
+
                 <View
                     style={styles.pitchWrapper}
                     onLayout={(e) => {
@@ -346,17 +631,77 @@ const CaptureScreen = ({ navigation }) => {
                         viewBox={`0 0 ${canvasSize.w} ${canvasSize.h}`}
                         pointerEvents="none"
                     >
-                        {allToRender.map((s) => (
-                            <Polyline
-                                key={s.id}
-                                points={s.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                                fill="none"
-                                stroke="white"
-                                strokeWidth="4"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
-                        ))}
+                        {allToRender.map((s) => {
+                            const type = s.type || "pen";
+                            const stroke = s.color || "#FFFFFF";
+                            const w = s.width || 4;
+
+                            if (type === "pen") {
+                                return (
+                                    <Polyline
+                                        key={s.id}
+                                        points={(s.points || []).map((p) => `${p.x},${p.y}`).join(" ")}
+                                        fill="none"
+                                        stroke={stroke}
+                                        strokeWidth={w}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    />
+                                );
+                            }
+
+                            if (type === "line") {
+                                return (
+                                    <Line
+                                        key={s.id}
+                                        x1={s.x1}
+                                        y1={s.y1}
+                                        x2={s.x2}
+                                        y2={s.y2}
+                                        stroke={stroke}
+                                        strokeWidth={w}
+                                        strokeLinecap="round"
+                                    />
+                                );
+                            }
+
+                            if (type === "circle") {
+                                return (
+                                    <Circle
+                                        key={s.id}
+                                        cx={s.cx}
+                                        cy={s.cy}
+                                        r={s.r}
+                                        stroke={stroke}
+                                        strokeWidth={w}
+                                        fill="rgba(0,0,0,0)" // transparent
+                                    />
+                                );
+                            }
+
+                            if (type === "arrow") {
+                                const headPoints = getArrowHead(s.x1, s.y1, s.x2, s.y2, w);
+
+                                return (
+                                    <React.Fragment key={s.id}>
+                                        <Line
+                                            x1={s.x1}
+                                            y1={s.y1}
+                                            x2={s.x2}
+                                            y2={s.y2}
+                                            stroke={stroke}
+                                            strokeWidth={w}
+                                            strokeLinecap="round"
+                                        />
+                                        <Polygon points={headPoints} fill={stroke} />
+                                    </React.Fragment>
+                                );
+                            }
+
+
+                            return null;
+                        })}
+
                     </Svg>
 
                     <View style={styles.overlayInfo} pointerEvents="none">
@@ -364,6 +709,7 @@ const CaptureScreen = ({ navigation }) => {
                             {isRecording ? "• REC" : ""} {isPlaying ? "• PLAY" : ""}
                         </Text>
                     </View>
+
                 </View>
 
 
@@ -413,7 +759,6 @@ const CaptureScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    // (En liten hack: vi använder wrapper som 16:9 så att ytan blir stabil)
     container: { flex: 1, backgroundColor: "#FFF" },
     header: {
         flexDirection: "row",
@@ -570,6 +915,44 @@ const styles = StyleSheet.create({
         backgroundColor: "#000",
     },
     noImageText: { color: "#CED4DA", fontSize: 14, textAlign: "center", marginTop: 8 },
+
+
+    //Här nytt
+    toolbar: { marginTop: 10, gap: 10 },
+    toolRow: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+
+    thicknessRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+    },
+
+
+    toolBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: "#E9ECEF",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    toolBtnActive: { backgroundColor: "#007AFF" },
+
+    smallBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: "#E9ECEF",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    smallBtnText: { fontSize: 20, fontWeight: "800", color: "#1A1A1A" },
+    thicknessText: { fontWeight: "700", color: "#1A1A1A" },
+
+    colorRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+    colorDot: { width: 26, height: 26, borderRadius: 13 },
+    colorDotActive: { transform: [{ scale: 1.15 }], borderWidth: 2, borderColor: "#1A1A1A" },
+
 
 });
 
