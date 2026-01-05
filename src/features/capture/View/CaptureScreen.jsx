@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import { Audio } from "expo-av";
 
 
 // OBS: Om du har react-native-svg installerat (vanligt i Expo) får du snygga linjer.
@@ -28,6 +29,11 @@ const CaptureScreen = ({ navigation }) => {
     //HÄR??
     const currentStrokeRef = useRef(null);
     const [recordingBaseStrokes, setRecordingBaseStrokes] = useState([]);
+
+    const audioRecordingRef = useRef(null);
+    const audioSoundRef = useRef(null);
+
+    const [audioUri, setAudioUri] = useState(null);
 
 
 
@@ -130,9 +136,10 @@ const CaptureScreen = ({ navigation }) => {
         currentStrokeRef.current = null;
         setRecordedStrokes([]);
         stopPlayback();
+        setAudioUri(null);
     };
 
-    const startRecording = () => {
+    const startRecording = async () => {
         stopPlayback();
 
         setRecordingBaseStrokes(strokes);
@@ -141,33 +148,102 @@ const CaptureScreen = ({ navigation }) => {
         recordStartRef.current = Date.now();
         isRecordingRef.current = true;
         setIsRecording(true);
+
+        // --- AUDIO ---
+        try {
+            const perm = await Audio.requestPermissionsAsync();
+            if (!perm.granted) {
+                console.warn("Mic permission denied");
+                return;
+            }
+
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const rec = new Audio.Recording();
+            await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+            await rec.startAsync();
+
+            audioRecordingRef.current = rec;
+            setAudioUri(null); // ny inspelning -> nollställ gammal
+        } catch (e) {
+            console.error("Kunde inte starta ljudinspelning:", e);
+        }
     };
 
 
-    const stopRecording = () => {
+    const stopRecording = async () => {
         isRecordingRef.current = false;
         setIsRecording(false);
+
+        // --- AUDIO ---
+        try {
+            const rec = audioRecordingRef.current;
+            if (!rec) return;
+
+            await rec.stopAndUnloadAsync();
+            const uri = rec.getURI();
+
+            audioRecordingRef.current = null;
+            setAudioUri(uri);
+        } catch (e) {
+            console.error("Kunde inte stoppa ljudinspelning:", e);
+        }
     };
 
-    const stopPlayback = () => {
+    const stopPlayback = async () => {
         setIsPlaying(false);
         setPlayheadMs(0);
+
         if (playTimerRef.current) {
             clearInterval(playTimerRef.current);
             playTimerRef.current = null;
         }
+
+        // --- AUDIO STOP ---
+        try {
+            if (audioSoundRef.current) {
+                await audioSoundRef.current.stopAsync();
+                await audioSoundRef.current.unloadAsync();
+                audioSoundRef.current = null;
+            }
+        } catch (e) {
+            console.error("Kunde inte stoppa ljud:", e);
+        }
     };
 
-    const startPlayback = () => {
+
+    const startPlayback = async () => {
         if (recordedStrokes.length === 0) return;
         setIsPlaying(true);
         setPlayheadMs(0);
+
+        // --- AUDIO PLAY ---
+        try {
+            if (audioUri) {
+                // städa ev gammalt sound
+                if (audioSoundRef.current) {
+                    await audioSoundRef.current.unloadAsync();
+                    audioSoundRef.current = null;
+                }
+
+                const { sound } = await Audio.Sound.createAsync(
+                    { uri: audioUri },
+                    { shouldPlay: true }
+                );
+                audioSoundRef.current = sound;
+            }
+        } catch (e) {
+            console.error("Kunde inte spela upp ljud:", e);
+        }
 
         const start = Date.now();
         playTimerRef.current = setInterval(() => {
             const t = Date.now() - start;
             setPlayheadMs(t);
-            // Auto-stop när vi passerat slutet
+
             const endMs = getEndMs(recordedStrokes);
             if (t >= endMs + 300) stopPlayback();
         }, 16);
