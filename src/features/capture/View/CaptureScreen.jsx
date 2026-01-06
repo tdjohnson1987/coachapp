@@ -175,6 +175,30 @@ const CaptureScreen = ({ navigation, route }) => {
                     return;
                 }
 
+                // prick
+                if (activeTool === "player") {
+                    const t = isRecordingRef.current ? now - recordStartRef.current : 0;
+
+                    const stroke = {
+                        id: now,
+                        type: "player",
+                        color: activeColor,
+                        width: activeWidth,
+                        cx: locationX,
+                        cy: locationY,
+                        r: Math.max(6, activeWidth * 3),
+                        t,
+                    };
+
+                    // spelare är klar direkt (tap)
+                    setStrokes((prev) => [...prev, stroke]);
+                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, stroke]);
+
+                    currentStrokeRef.current = null;
+                    setCurrentStroke(null);
+                    return;
+                }
+
                 //pil
 
                 if (activeTool === "arrow") {
@@ -529,7 +553,7 @@ const CaptureScreen = ({ navigation, route }) => {
                 <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
                     <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
                 </TouchableOpacity>
-                
+
                 <View style={{ alignItems: 'center' }}>
                     <Text style={styles.headerTitle}>Capture</Text>
                     {returnProfile && (
@@ -538,7 +562,7 @@ const CaptureScreen = ({ navigation, route }) => {
                         </Text>
                     )}
                 </View>
-                
+
                 <View style={{ width: 32 }} />
             </View>
 
@@ -595,6 +619,15 @@ const CaptureScreen = ({ navigation, route }) => {
                         >
                             <Ionicons name="ellipse-outline" size={18} color={tool === "circle" ? "#FFF" : "#1A1A1A"} />
                         </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.toolBtn, tool === "player" && styles.toolBtnActive]}
+                            onPress={() => setTool("player")}
+                        >
+                            <Ionicons name="ellipse" size={18} color={tool === "player" ? "#FFF" : "#1A1A1A"} />
+
+                        </TouchableOpacity>
+
 
                         <TouchableOpacity
                             style={[styles.toolBtn, tool === "arrow" && styles.toolBtnActive]}
@@ -717,6 +750,21 @@ const CaptureScreen = ({ navigation, route }) => {
                                     />
                                 );
                             }
+
+                            if (type === "player") {
+                                return (
+                                    <Circle
+                                        key={s.id}
+                                        cx={s.cx}
+                                        cy={s.cy}
+                                        r={s.r}
+                                        fill={stroke}                 // FYLLD
+                                        stroke="rgba(0,0,0,0.2)"
+                                        strokeWidth={Math.max(1, w / 2)}
+                                    />
+                                );
+                            }
+
 
                             if (type === "arrow") {
                                 const headPoints = getArrowHead(s.x1, s.y1, s.x2, s.y2, w);
