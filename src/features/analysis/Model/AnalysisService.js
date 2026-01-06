@@ -1,4 +1,3 @@
-// src/features/analysis/Model/AnalysisService.js
 import { transcribeAudio } from '../../../api/sttApi';
 import { saveReport } from '../../../api/filesApi';
 
@@ -15,7 +14,7 @@ const AnalysisService = {
   async extractPreviewFrames({ videoFile, frameCount = 6 }) {
     // Här kan du senare implementera <video> + <canvas>
     const videoDuration = 30; // Anta 30 sekunder för nu (ersätt med riktig duration)
-    const interval = videoDuration / frameCount;    
+    const interval = videoDuration / frameCount;
 
     // För nu: returnera mock-data
     const frames = [];

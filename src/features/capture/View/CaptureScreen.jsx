@@ -2,6 +2,8 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
+import DrawingToolbar from "../../../components/drawing/DrawingToolbar";
+
 
 import useCaptureVM from "../ViewModel/useCaptureVM";
 
@@ -67,84 +69,16 @@ const CaptureScreen = ({ navigation, route }) => {
                     {vm.customImageUri ? "Egen bild vald" : `Vald plan: ${vm.selectedPlanLabel}`}
                 </Text>
 
-                <View style={styles.toolbar}>
-                    {/* Rad 1: verktyg */}
-                    <View style={styles.toolRow}>
-                        <TouchableOpacity
-                            style={[styles.toolBtn, vm.tool === "pen" && styles.toolBtnActive]}
-                            onPress={() => vm.setTool("pen")}
-                        >
-                            <Ionicons name="pencil" size={18} color={vm.tool === "pen" ? "#FFF" : "#1A1A1A"} />
-                        </TouchableOpacity>
+                <DrawingToolbar
+                    tool={vm.tool}
+                    setTool={vm.setTool}
+                    color={vm.color}
+                    setColor={vm.setColor}
+                    strokeWidth={vm.strokeWidth}
+                    setStrokeWidth={vm.setStrokeWidth}
+                    onUndo={vm.handleUndo}
+                />
 
-                        <TouchableOpacity
-                            style={[styles.toolBtn, vm.tool === "line" && styles.toolBtnActive]}
-                            onPress={() => vm.setTool("line")}
-                        >
-                            <Ionicons name="remove" size={22} color={vm.tool === "line" ? "#FFF" : "#1A1A1A"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.toolBtn, vm.tool === "circle" && styles.toolBtnActive]}
-                            onPress={() => vm.setTool("circle")}
-                        >
-                            <Ionicons name="ellipse-outline" size={18} color={vm.tool === "circle" ? "#FFF" : "#1A1A1A"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.toolBtn, vm.tool === "player" && styles.toolBtnActive]}
-                            onPress={() => vm.setTool("player")}
-                        >
-                            <Ionicons name="ellipse" size={18} color={vm.tool === "player" ? "#FFF" : "#1A1A1A"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.toolBtn, vm.tool === "arrow" && styles.toolBtnActive]}
-                            onPress={() => vm.setTool("arrow")}
-                        >
-                            <Ionicons name="arrow-forward" size={18} color={vm.tool === "arrow" ? "#FFF" : "#1A1A1A"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.toolBtn} onPress={vm.handleUndo}>
-                            <Ionicons name="arrow-undo" size={18} color="#1A1A1A" />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Rad 2: tjocklek */}
-                    <View style={styles.thicknessRow}>
-                        <TouchableOpacity
-                            style={styles.smallBtn}
-                            onPress={() => vm.setStrokeWidth((v) => Math.max(2, v - 1))}
-                        >
-                            <Text style={styles.smallBtnText}>−</Text>
-                        </TouchableOpacity>
-
-                        <Text style={styles.thicknessText}>{vm.strokeWidth}px</Text>
-
-                        <TouchableOpacity
-                            style={styles.smallBtn}
-                            onPress={() => vm.setStrokeWidth((v) => Math.min(12, v + 1))}
-                        >
-                            <Text style={styles.smallBtnText}>+</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Färger */}
-                    <View style={styles.colorRow}>
-                        {["#FFFFFF", "#FF3B30", "#34C759", "#007AFF", "#FFCC00", "#AF52DE", "#000000"].map((c) => (
-                            <TouchableOpacity
-                                key={c}
-                                onPress={() => vm.setColor(c)}
-                                style={[
-                                    styles.colorDot,
-                                    { backgroundColor: c },
-                                    vm.color === c && styles.colorDotActive,
-                                    c === "#FFFFFF" && { borderWidth: 1, borderColor: "#CED4DA" },
-                                ]}
-                            />
-                        ))}
-                    </View>
-                </View>
 
                 <View
                     style={styles.pitchWrapper}
