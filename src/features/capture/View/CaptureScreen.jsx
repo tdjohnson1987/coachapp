@@ -282,9 +282,9 @@ const CaptureScreen = ({ navigation, route }) => {
 
                     {!vm.isPlaying ? (
                         <TouchableOpacity
-                            style={[styles.btnGreen, vm.recordedStrokes.length === 0 && styles.btnDisabled]}
+                            style={[styles.btnGreen, vm.recordedEvents.length === 0 && styles.btnDisabled]}
                             onPress={vm.startPlayback}
-                            disabled={vm.recordedStrokes.length === 0}
+                            disabled={vm.recordedEvents.length === 0}
                         >
                             <Ionicons name="play" size={18} color="#FFF" />
                             <Text style={styles.btnText}>Spela upp</Text>

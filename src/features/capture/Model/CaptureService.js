@@ -1,5 +1,3 @@
-// capture/Model/CaptureService.js
-
 export const builtInPlans = [
     { id: "tom", label: "Tom", src: require("../../../assets/fields/tom.jpg") },
     { id: "fotball", label: "Fotboll", src: require("../../../assets/fields/fotball.jpg") },

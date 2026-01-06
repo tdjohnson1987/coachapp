@@ -2,18 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
-import { builtInPlans, getArrowHead, getEndMs } from "../Model/CaptureService";
+import { builtInPlans, getArrowHead } from "../Model/CaptureService";
 
 export default function useCaptureVM() {
     // Ritdata
     const [strokes, setStrokes] = useState([]);
     const [currentStroke, setCurrentStroke] = useState(null);
 
-    // Inspelning
+    // Inspelning (events)
     const [isRecording, setIsRecording] = useState(false);
     const isRecordingRef = useRef(false);
-    const [recordedStrokes, setRecordedStrokes] = useState([]);
     const recordStartRef = useRef(0);
+    const [recordedEvents, setRecordedEvents] = useState([]); // {type:"add"|"undo"|"clear", t, stroke?}
 
     // Playback
     const [isPlaying, setIsPlaying] = useState(false);
@@ -34,7 +34,7 @@ export default function useCaptureVM() {
     const [tool, setTool] = useState("pen");
     const [color, setColor] = useState("#FFFFFF");
     const [strokeWidth, setStrokeWidth] = useState(4);
-    const [circleRadius, setCircleRadius] = useState(14); // (du använder inte denna just nu, men behåller)
+    const [circleRadius, setCircleRadius] = useState(14);
 
     // Refs så PanResponder alltid har senaste värden
     const toolRef = useRef(tool);
@@ -80,6 +80,23 @@ export default function useCaptureVM() {
         setCustomImageUri(null);
     };
 
+    // ========= Helpers =========
+
+    const buildStrokesAtTime = (base, events, tMs) => {
+        let out = [...base];
+
+        for (const e of events) {
+            if (e.t > tMs) break;
+
+            if (e.type === "add") out.push(e.stroke);
+            if (e.type === "undo") out.pop();
+            if (e.type === "clear") out = [];
+        }
+        return out;
+    };
+
+    // ========= Playback =========
+
     const stopPlayback = async () => {
         setIsPlaying(false);
         setPlayheadMs(0);
@@ -100,80 +117,13 @@ export default function useCaptureVM() {
         }
     };
 
-    const handleClear = () => {
-        setStrokes([]);
-        setCurrentStroke(null);
-        currentStrokeRef.current = null;
-        setRecordedStrokes([]);
-        stopPlayback();
-        setAudioUri(null);
-    };
-
-    const handleUndo = () => {
-        setCurrentStroke(null);
-        currentStrokeRef.current = null;
-
-        setStrokes((prev) => prev.slice(0, -1));
-        setRecordedStrokes((prev) => prev.slice(0, -1));
-    };
-
-    const startRecording = async () => {
-        stopPlayback();
-
-        setRecordingBaseStrokes(strokes);
-        setRecordedStrokes([]);
-
-        recordStartRef.current = Date.now();
-        isRecordingRef.current = true;
-        setIsRecording(true);
-
-        try {
-            const perm = await Audio.requestPermissionsAsync();
-            if (!perm.granted) {
-                console.warn("Mic permission denied");
-                return;
-            }
-
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-            });
-
-            const rec = new Audio.Recording();
-            await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-            await rec.startAsync();
-
-            audioRecordingRef.current = rec;
-            setAudioUri(null);
-        } catch (e) {
-            console.error("Kunde inte starta ljudinspelning:", e);
-        }
-    };
-
-    const stopRecording = async () => {
-        isRecordingRef.current = false;
-        setIsRecording(false);
-
-        try {
-            const rec = audioRecordingRef.current;
-            if (!rec) return;
-
-            await rec.stopAndUnloadAsync();
-            const uri = rec.getURI();
-
-            audioRecordingRef.current = null;
-            setAudioUri(uri);
-        } catch (e) {
-            console.error("Kunde inte stoppa ljudinspelning:", e);
-        }
-    };
-
     const startPlayback = async () => {
-        if (recordedStrokes.length === 0) return;
+        if (recordedEvents.length === 0) return;
 
         setIsPlaying(true);
         setPlayheadMs(0);
 
+        // --- AUDIO PLAY ---
         try {
             if (audioUri) {
                 if (audioSoundRef.current) {
@@ -196,12 +146,101 @@ export default function useCaptureVM() {
             const t = Date.now() - start;
             setPlayheadMs(t);
 
-            const endMs = getEndMs(recordedStrokes);
+            const endMs = recordedEvents.length
+                ? recordedEvents[recordedEvents.length - 1].t
+                : 0;
+
             if (t >= endMs + 300) stopPlayback();
         }, 16);
     };
 
-    // PanResponder (ritlogik)
+    // ========= Actions =========
+
+    const handleClear = () => {
+        setStrokes([]);
+        setCurrentStroke(null);
+        currentStrokeRef.current = null;
+
+        stopPlayback();
+        setAudioUri(null);
+
+        if (isRecordingRef.current) {
+            const t = Date.now() - recordStartRef.current;
+            setRecordedEvents((prev) => [...prev, { type: "clear", t }]);
+        }
+    };
+
+    const handleUndo = () => {
+        setCurrentStroke(null);
+        currentStrokeRef.current = null;
+
+        setStrokes((prev) => prev.slice(0, -1));
+
+        if (isRecordingRef.current) {
+            const t = Date.now() - recordStartRef.current;
+            setRecordedEvents((prev) => [...prev, { type: "undo", t }]);
+        }
+    };
+
+    const startRecording = async () => {
+        stopPlayback();
+
+        setRecordingBaseStrokes(strokes);
+        setRecordedEvents([]);
+
+        recordStartRef.current = Date.now();
+        isRecordingRef.current = true;
+        setIsRecording(true);
+
+        // --- AUDIO REC ---
+        try {
+            const perm = await Audio.requestPermissionsAsync();
+            if (!perm.granted) {
+                console.warn("Mic permission denied");
+                // återställ REC om du vill
+                isRecordingRef.current = false;
+                setIsRecording(false);
+                return;
+            }
+
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const rec = new Audio.Recording();
+            await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+            await rec.startAsync();
+
+            audioRecordingRef.current = rec;
+            setAudioUri(null);
+        } catch (e) {
+            console.error("Kunde inte starta ljudinspelning:", e);
+            isRecordingRef.current = false;
+            setIsRecording(false);
+        }
+    };
+
+    const stopRecording = async () => {
+        isRecordingRef.current = false;
+        setIsRecording(false);
+
+        try {
+            const rec = audioRecordingRef.current;
+            if (!rec) return;
+
+            await rec.stopAndUnloadAsync();
+            const uri = rec.getURI();
+
+            audioRecordingRef.current = null;
+            setAudioUri(uri);
+        } catch (e) {
+            console.error("Kunde inte stoppa ljudinspelning:", e);
+        }
+    };
+
+    // ========= PanResponder =========
+
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
@@ -214,7 +253,6 @@ export default function useCaptureVM() {
                 const activeTool = toolRef.current;
                 const activeColor = colorRef.current;
                 const activeWidth = strokeWidthRef.current;
-                const activeRadius = circleRadiusRef.current;
 
                 // PEN
                 if (activeTool === "pen") {
@@ -292,7 +330,10 @@ export default function useCaptureVM() {
                     };
 
                     setStrokes((prev) => [...prev, stroke]);
-                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, stroke]);
+
+                    if (isRecordingRef.current) {
+                        setRecordedEvents((prev) => [...prev, { type: "add", t, stroke }]);
+                    }
 
                     currentStrokeRef.current = null;
                     setCurrentStroke(null);
@@ -372,7 +413,10 @@ export default function useCaptureVM() {
 
                 if (stroke.type === "pen") {
                     setStrokes((prev) => [...prev, stroke]);
-                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, stroke]);
+                    if (isRecordingRef.current) {
+                        const t = now - recordStartRef.current;
+                        setRecordedEvents((prev) => [...prev, { type: "add", t, stroke }]);
+                    }
                 }
 
                 if (stroke.type === "line") {
@@ -380,14 +424,24 @@ export default function useCaptureVM() {
                     const finalized = { ...stroke, t };
 
                     setStrokes((prev) => [...prev, finalized]);
-                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, finalized]);
+
+                    if (isRecordingRef.current) {
+                        setRecordedEvents((prev) => [
+                            ...prev,
+                            { type: "add", t: finalized.t, stroke: finalized },
+                        ]);
+                    }
                 }
 
                 if (stroke.type === "circle") {
                     const MIN_R = 3;
                     if ((stroke.r ?? 0) >= MIN_R) {
                         setStrokes((prev) => [...prev, stroke]);
-                        if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, stroke]);
+
+                        if (isRecordingRef.current) {
+                            const t = now - recordStartRef.current;
+                            setRecordedEvents((prev) => [...prev, { type: "add", t, stroke }]);
+                        }
                     }
 
                     currentStrokeRef.current = null;
@@ -400,7 +454,13 @@ export default function useCaptureVM() {
                     const finalized = { ...stroke, t };
 
                     setStrokes((prev) => [...prev, finalized]);
-                    if (isRecordingRef.current) setRecordedStrokes((prev) => [...prev, finalized]);
+
+                    if (isRecordingRef.current) {
+                        setRecordedEvents((prev) => [
+                            ...prev,
+                            { type: "add", t: finalized.t, stroke: finalized },
+                        ]);
+                    }
 
                     currentStrokeRef.current = null;
                     setCurrentStroke(null);
@@ -413,11 +473,15 @@ export default function useCaptureVM() {
         })
     ).current;
 
-    // Playback-lagret
+    // ========= Playback-lagret =========
+
     const visibleRecorded = useMemo(() => {
         if (!isPlaying) return [];
 
-        return recordedStrokes
+        // strokes som "finns" vid tiden playheadMs, enligt events
+        const stack = buildStrokesAtTime([], recordedEvents, playheadMs);
+
+        return stack
             .map((s) => {
                 const type = s.type || "pen";
 
@@ -429,11 +493,10 @@ export default function useCaptureVM() {
                     };
                 }
 
-                return s.t <= playheadMs ? { ...s, type } : null;
+                return { ...s, type };
             })
-            .filter(Boolean)
             .filter((s) => (s.type === "pen" ? (s.points?.length ?? 0) >= 2 : true));
-    }, [isPlaying, playheadMs, recordedStrokes]);
+    }, [isPlaying, playheadMs, recordedEvents]);
 
     const baseToRender = isPlaying ? recordingBaseStrokes : strokes;
 
@@ -480,7 +543,7 @@ export default function useCaptureVM() {
         // Inspelning/playback
         isRecording,
         isPlaying,
-        recordedStrokes,
+        recordedEvents,
         startRecording,
         stopRecording,
         startPlayback,
