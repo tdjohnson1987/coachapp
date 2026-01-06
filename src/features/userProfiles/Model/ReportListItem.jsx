@@ -3,29 +3,33 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const ReportListItem = ({ report, onPress, onLongPress }) => {
-  return (
-    <TouchableOpacity 
-      style={styles.reportCard} 
-      onPress={() => onPress(report)}
-      onLongPress={() => onLongPress(report.id)} // <--- Triggar popup
-      delayLongPress={500} // Hur länge man måste hålla in (halv sekund)
-    >
-      <View style={styles.reportIconWrapper}>
-        <Ionicons 
-          name={report.type.includes("Drawing") ? "brush" : "videocam"} 
-          size={20} 
-          color="#007AFF" 
-        />
-      </View>
-      
-      <View style={styles.reportInfo}>
-        <Text style={styles.reportTitle}>{report.type}</Text>
-        <Text style={styles.reportDate}>{report.date} • {report.time}</Text>
-      </View>
+    const reportType = report?.type || "Okänd analys";
+    const isDrawing = reportType.toLowerCase().includes("drawing");
+    return (
+        <TouchableOpacity 
+            style={styles.reportCard} 
+            onPress={() => onPress(report)}
+            onLongPress={() => onLongPress(report.id)}
+            delayLongPress={600}
+        >
+            <View style={styles.reportIconWrapper}>
+                <Ionicons 
+                    name={isDrawing ? "brush" : "videocam"} 
+                    size={20} 
+                    color="#007AFF" 
+                />
+            </View>
+            
+            <View style={styles.reportInfo}>
+                <Text style={styles.reportTitle}>{reportType}</Text>
+                <Text style={styles.reportDate}>
+                    {report?.date || "Inget datum"} • {report?.time || ""}
+                </Text>
+            </View>
 
-      <Ionicons name="chevron-forward" size={18} color="#ADB5BD" />
-    </TouchableOpacity>
-  );
+            <Ionicons name="chevron-forward" size={18} color="#ADB5BD" />
+        </TouchableOpacity>
+    );
 };
 
 const styles = StyleSheet.create({

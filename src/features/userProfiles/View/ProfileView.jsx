@@ -39,6 +39,7 @@ const ProfileView = ({ route, navigation }) => {
   useEffect(() => {
     setEditData(profile);
   }, [profile]);
+  
   const handleDeleteReport = (reportId) => {
     Alert.alert(
       "Radera analys",

@@ -29,23 +29,22 @@ export default function App() {
 
   // --- NY FUNKTION: Lägg till analys i en profils historik ---
   const addAnalysisToProfile = (profileId, newAnalysis) => {
-    setProfiles((prevProfiles) => {
-      const updatedProfiles = prevProfiles.map((p) => {
-        if (p.id === profileId) {
-          // Skapa reports-array om den inte finns, annars lägg till mätningen överst
-          const updatedReports = [newAnalysis, ...(p.reports || [])];
-          const updatedUser = { ...p, reports: updatedReports };
-          
-          // Om detta är den valda profilen, uppdatera även selectedProfile-statet
-          if (selectedProfile?.id === profileId) {
-            setSelectedProfile(updatedUser);
-          }
-          return updatedUser;
-        }
-        return p;
-      });
-      return updatedProfiles;
-    });
+    const analysisWithId = {
+      ...newAnalysis,
+      id: newAnalysis.id || Date.now().toString() 
+    };
+
+    setProfiles((prev) => prev.map((p) => {
+      if (p.id === profileId) {
+        const updatedReports = [analysisWithId, ...(p.reports || [])];
+        const updatedUser = { ...p, reports: updatedReports };
+        
+        // Synka vald profil direkt så listan uppdateras i vyn
+        setSelectedProfile(updatedUser);
+        return updatedUser;
+      }
+      return p;
+    }));
   };
 
   // 1. Load profiles from storage on app start
@@ -87,7 +86,10 @@ export default function App() {
 
   // Simple navigation helper
   const navigate = (screen, params) => {
-    if (params?.profile) setSelectedProfile(params.profile);
+    // Om vi får en profil i params, uppdatera den valda profilen
+    if (params?.profile) {
+      setSelectedProfile(params.profile);
+    }
     if (params?.playbackReport) {
       setSelectedReport(params.playbackReport);
     }

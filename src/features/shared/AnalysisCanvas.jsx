@@ -10,16 +10,16 @@ const AnalysisCanvas = ({
 }) => {
     return (
         <View style={styles.container}>
-            {/* 1. Bakgrundsbilden (Planen) */}
+            {/* 1. Bakgrundsbilden - MÅSTE vara stretch för att matcha SVG:n */}
             {activeImageSource && (
                 <Image
                     source={activeImageSource}
                     style={StyleSheet.absoluteFill}
-                    resizeMode="contain"
+                    resizeMode="stretch" // Tvingar bilden att täcka hela rutan (koordinatsystemet)
                 />
             )}
 
-            {/* 2. SVG-lagret (Ritningarna) */}
+            {/* 2. SVG-lagret - Låst till canvasSize */}
             <Svg
                 style={StyleSheet.absoluteFill}
                 viewBox={`0 0 ${canvasSize.w} ${canvasSize.h}`}
@@ -75,9 +75,9 @@ const AnalysisCanvas = ({
 const styles = StyleSheet.create({
     container: {
         ...StyleSheet.absoluteFillObject,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#0B6E3A', // Grön planfärg som backup
+        // VIKTIGT: Ta bort justifyContent/alignItems härifrån!
+        backgroundColor: '#000', 
+        overflow: 'hidden',
     },
 });
 

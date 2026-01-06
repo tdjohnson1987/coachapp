@@ -476,15 +476,27 @@ export default function useCaptureVM() {
     
     //========== Saving - lager =========
     const saveAnalysis = (profileId, onSaveCallback) => {
+        // Om du vill ha en säkerhetscheck
+        if (recordedEvents.length === 0 && !audioUri) return false;
+
         const analysisSnapshot = {
-            id: Date.now(),
-            timestamp: new Date().toISOString(),
-            // Här bakar vi ihop ALLT
+            id: Date.now().toString(), // Sträng är säkrare för list-keys
+            type: "Drawing Analysis", // För att ReportListItem ska fungera
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            
+            // KRITISKT: Lägg dessa på toppnivå så AnalysisCanvas hittar dem direkt
+            recordedEvents: [...recordedEvents],
+            activeImageSource: activeImageSource, // Denna variabel finns i din VM
+            canvasSize: { ...canvasSize },
+            baseStrokes: [...recordingBaseStrokes],
+            
+            // Behåll din gamla struktur om du vill, men ovanstående behövs för visningen
             composition: {
                 background: customImageUri || selectedPlanId,
                 initialStrokes: recordingBaseStrokes,
                 events: recordedEvents,
-                canvasRatio: canvasSize.w / canvasSize.h // Spara proportionerna!
+                canvasRatio: canvasSize.w / canvasSize.h
             },
             audioUri: audioUri,
         };
@@ -492,32 +504,39 @@ export default function useCaptureVM() {
         onSaveCallback(profileId, analysisSnapshot);
         return true;
     };
-    
+
     const loadSavedReport = (report) => {
-        AnalysisService.loadAnalysis(report, {
-            setAudio: setAudioUri,
-            setDrawingData: (data) => {
-                setRecordedEvents(data);
-                
-                // Hämta basritningarna från rapporten, annars tom array
-                const base = report.baseStrokes || [];
-                setRecordingBaseStrokes(base);
-                
-                // Skapa förhandsvisningen genom att kombinera basen med alla händelser
-                const finalStrokes = buildStrokesAtTime(base, data, 9999999); 
-                setStrokes(finalStrokes);
-            },
-            setBackground: (bg) => {
-                if (typeof bg === 'string' && (bg.includes('/') || bg.includes('file:'))) {
-                    // Det är en egen bild (URI)
-                    setCustomImageUri(bg);
-                    setSelectedPlanId(null);;
-                } else {
-                    setSelectedPlanId(bg);
-                    setCustomImageUri(null);
-                }
+        if (!report) return;
+
+        // 1. Sätt proportionerna direkt (Viktigt för zoomen!)
+        if (report.canvasSize) {
+            setCanvasSize(report.canvasSize);
+        }
+
+        // 2. Hämta data från din "composition" eller toppnivå
+        const events = report.recordedEvents || report.composition?.events || [];
+        const base = report.baseStrokes || report.composition?.initialStrokes || [];
+        const bg = report.activeImageSource || report.composition?.background;
+
+        // 3. Uppdatera statet manuellt istället för att lita på en extern service
+        setRecordedEvents(events);
+        setRecordingBaseStrokes(base);
+        setAudioUri(report.audioUri || null);
+
+        // 4. Skapa den statiska bilden (det man ser direkt)
+        const finalStrokes = buildStrokesAtTime(base, events, 9999999); 
+        setStrokes(finalStrokes);
+
+        // 5. Hantera bakgrunden (Fixar "ingen bild")
+        if (bg) {
+            if (typeof bg === 'string' && (bg.includes('/') || bg.includes('file:'))) {
+                setCustomImageUri(bg);
+                setSelectedPlanId(null);
+            } else {
+                setSelectedPlanId(bg);
+                setCustomImageUri(null);
             }
-        });
+        }
     };
 
     // ========= Playback-lagret =========

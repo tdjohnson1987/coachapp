@@ -186,7 +186,7 @@ const CaptureScreen = ({ navigation, route }) => {
                         <Image
                             source={vm.activeImageSource}
                             style={styles.bgImage}
-                            resizeMode="contain"
+                            resizeMode="stretch"
                             pointerEvents="none"
                         />
                     ) : (
