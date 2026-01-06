@@ -11,6 +11,7 @@ import ReportGeneratorView from './src/features/analysis/View/ReportGeneratorVie
 import { useAnalysisVM } from './src/features/analysis/ViewModel/useAnalysisVM';
 
 import CaptureScreen from './src/features/capture/View/CaptureScreen';
+import ReportDetailView from './src/features/userProfiles/View/ReportDetailView';
 
 
 export default function App() {
@@ -81,10 +82,15 @@ export default function App() {
     };
     if (!loading) saveProfiles();
   }, [profiles, loading]);
+  
+  const [selectedReport, setSelectedReport] = useState(null);
 
   // Simple navigation helper
   const navigate = (screen, params) => {
     if (params?.profile) setSelectedProfile(params.profile);
+    if (params?.playbackReport) {
+      setSelectedReport(params.playbackReport);
+    }
     setCurrentScreen(screen);
   };
 
@@ -143,8 +149,16 @@ export default function App() {
       {currentScreen === 'ReportGenerator' && (
         <ReportGeneratorView navigation={{ navigate }} vm={analysisVM} />
       )}
-      
 
+      {currentScreen === 'ReportDetail' && selectedReport && (
+        <ReportDetailView 
+          route={{ params: { playbackReport: selectedReport } }} 
+          navigation={{ 
+            goBack: () => setCurrentScreen('Profile') 
+          }} 
+        />
+      )}
+    
       {currentScreen === 'Capture' && (
         <CaptureScreen 
           navigation={{ navigate }} 

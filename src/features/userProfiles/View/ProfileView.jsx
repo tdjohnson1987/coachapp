@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import ReportListItem from '../Model/ReportListItem';
 
 const ProfileView = ({ route, navigation }) => {
   const { profile, onUpdate } = route.params;
@@ -38,6 +39,27 @@ const ProfileView = ({ route, navigation }) => {
   useEffect(() => {
     setEditData(profile);
   }, [profile]);
+  const handleDeleteReport = (reportId) => {
+    Alert.alert(
+      "Radera analys",
+      "Är du säker? Detta går inte att ångra.",
+      [
+        { text: "Avbryt", style: "cancel" },
+        { 
+          text: "Radera", 
+          style: "destructive",
+          onPress: () => {
+            // Filtrera bort rapporten från editData
+            const updatedReports = editData.reports.filter(r => r.id !== reportId);
+            const updatedProfile = { ...editData, reports: updatedReports };
+            
+            setEditData(updatedProfile); // Uppdatera lokalt state
+            onUpdate(updatedProfile);    // Skicka till App.js så det sparas globalt
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -153,36 +175,12 @@ const ProfileView = ({ route, navigation }) => {
             <View style={styles.reportsList}>
               {editData.reports && editData.reports.length > 0 ? (
                 editData.reports.map((report) => (
-                  <TouchableOpacity 
-                    key={report.id} 
-                    style={styles.reportCard}
-                    onPress={() => {
-                      // Vi skickar med hela rapport-objektet till Capture-skärmen
-                      navigation.navigate('Capture', { 
-                        returnToProfile: editData,
-                        playbackReport: report // Detta skickar med ritdata och ljud
-                      });
-                    }}
-                  >
-                    <View style={styles.reportIconWrapper}>
-                      <Ionicons 
-                        name={report.type.includes("Drawing") ? "brush" : "videocam"} 
-                        size={20} 
-                        color="#007AFF" 
-                      />
-                    </View>
-                    
-                    <View style={styles.reportInfo}>
-                      <Text style={styles.reportTitle}>
-                        {report.type}
-                      </Text>
-                      <Text style={styles.reportDate}>
-                        {report.date} • {report.time}
-                      </Text>
-                    </View>
-
-                    <Ionicons name="chevron-forward" size={18} color="#ADB5BD" />
-                  </TouchableOpacity>
+                  <ReportListItem 
+                      key={report.id}
+                      report={report}
+                      onPress={(r) => navigation.navigate('ReportDetail', { playbackReport: r })}
+                      onLongPress={handleDeleteReport} // Anropar din Alert-popup
+                  />
                 ))
               ) : (
                 <View style={styles.emptyState}>

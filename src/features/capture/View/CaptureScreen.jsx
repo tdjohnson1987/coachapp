@@ -9,7 +9,7 @@ const CaptureScreen = ({ navigation, route }) => {
     const vm = useCaptureVM();
 
     const returnProfile = route?.params?.returnToProfile;
-    
+
     const handleSaveAndExit = () => {
         const onSave = route.params?.onSaveAnalysis;
         if (!returnProfile || !onSave) return;
@@ -177,7 +177,7 @@ const CaptureScreen = ({ navigation, route }) => {
                     style={styles.pitchWrapper}
                     onLayout={(e) => {
                         const { width, height } = e.nativeEvent.layout;
-                        vm.setCanvasSize({ w: width || 1, h: height || 1 });
+                        vm.setCanvasSize({ w: width || 0, h: height || 0 });
                     }}
                     {...vm.panHandlers}
                 >

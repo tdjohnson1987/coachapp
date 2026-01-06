@@ -21,7 +21,7 @@ export default function useCaptureVM() {
     const [playheadMs, setPlayheadMs] = useState(0);
     const playTimerRef = useRef(null);
 
-    const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
+    const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
 
     const currentStrokeRef = useRef(null);
     const [recordingBaseStrokes, setRecordingBaseStrokes] = useState([]);
@@ -476,37 +476,42 @@ export default function useCaptureVM() {
     
     //========== Saving - lager =========
     const saveAnalysis = (profileId, onSaveCallback) => {
-        if (!audioUri && recordedEvents.length === 0) return false;
-
-        const newAnalysis = {
+        const analysisSnapshot = {
             id: Date.now(),
-            date: new Date().toLocaleDateString('sv-SE'),
-            time: new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
-            type: "Drawing & Voice",
+            timestamp: new Date().toISOString(),
+            // Här bakar vi ihop ALLT
+            composition: {
+                background: customImageUri || selectedPlanId,
+                initialStrokes: recordingBaseStrokes,
+                events: recordedEvents,
+                canvasRatio: canvasSize.w / canvasSize.h // Spara proportionerna!
+            },
             audioUri: audioUri,
-            drawingData: recordedEvents, 
-            thumbnail: customImageUri || selectedPlanId
         };
 
-        onSaveCallback(profileId, newAnalysis);
+        onSaveCallback(profileId, analysisSnapshot);
         return true;
     };
+    
     const loadSavedReport = (report) => {
         AnalysisService.loadAnalysis(report, {
             setAudio: setAudioUri,
             setDrawingData: (data) => {
                 setRecordedEvents(data);
                 
-                // Rekonstruera den slutgiltiga bilden så den syns direkt
-                // Vi använder din existerande helper buildStrokesAtTime
-                const finalStrokes = buildStrokesAtTime([], data, 9999999); 
+                // Hämta basritningarna från rapporten, annars tom array
+                const base = report.baseStrokes || [];
+                setRecordingBaseStrokes(base);
+                
+                // Skapa förhandsvisningen genom att kombinera basen med alla händelser
+                const finalStrokes = buildStrokesAtTime(base, data, 9999999); 
                 setStrokes(finalStrokes);
             },
             setBackground: (bg) => {
-                // Om bg ser ut som en URI (innehåller '/') är det en custom image
                 if (typeof bg === 'string' && (bg.includes('/') || bg.includes('file:'))) {
+                    // Det är en egen bild (URI)
                     setCustomImageUri(bg);
-                    setSelectedPlanId(null);
+                    setSelectedPlanId(null);;
                 } else {
                     setSelectedPlanId(bg);
                     setCustomImageUri(null);
