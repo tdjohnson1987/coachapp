@@ -3,6 +3,7 @@ import { PanResponder } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
 import { builtInPlans, getArrowHead } from "../Model/CaptureService";
+import { AnalysisService } from "../../shared/AnalysisService"
 
 export default function useCaptureVM() {
     // Ritdata
@@ -472,6 +473,47 @@ export default function useCaptureVM() {
             },
         })
     ).current;
+    
+    //========== Saving - lager =========
+    const saveAnalysis = (profileId, onSaveCallback) => {
+        if (!audioUri && recordedEvents.length === 0) return false;
+
+        const newAnalysis = {
+            id: Date.now(),
+            date: new Date().toLocaleDateString('sv-SE'),
+            time: new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
+            type: "Drawing & Voice",
+            audioUri: audioUri,
+            drawingData: recordedEvents, 
+            thumbnail: customImageUri || selectedPlanId
+        };
+
+        onSaveCallback(profileId, newAnalysis);
+        return true;
+    };
+    const loadSavedReport = (report) => {
+        AnalysisService.loadAnalysis(report, {
+            setAudio: setAudioUri,
+            setDrawingData: (data) => {
+                setRecordedEvents(data);
+                
+                // Rekonstruera den slutgiltiga bilden så den syns direkt
+                // Vi använder din existerande helper buildStrokesAtTime
+                const finalStrokes = buildStrokesAtTime([], data, 9999999); 
+                setStrokes(finalStrokes);
+            },
+            setBackground: (bg) => {
+                // Om bg ser ut som en URI (innehåller '/') är det en custom image
+                if (typeof bg === 'string' && (bg.includes('/') || bg.includes('file:'))) {
+                    setCustomImageUri(bg);
+                    setSelectedPlanId(null);
+                } else {
+                    setSelectedPlanId(bg);
+                    setCustomImageUri(null);
+                }
+            }
+        });
+    };
 
     // ========= Playback-lagret =========
 
@@ -548,6 +590,11 @@ export default function useCaptureVM() {
         stopRecording,
         startPlayback,
         stopPlayback,
+
+        // Saving
+        saveAnalysis,
+        audioUri,
+        loadSavedReport,
 
         // Actions
         handleUndo,

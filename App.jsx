@@ -26,6 +26,27 @@ export default function App() {
     sport: 'football',
   });
 
+  // --- NY FUNKTION: Lägg till analys i en profils historik ---
+  const addAnalysisToProfile = (profileId, newAnalysis) => {
+    setProfiles((prevProfiles) => {
+      const updatedProfiles = prevProfiles.map((p) => {
+        if (p.id === profileId) {
+          // Skapa reports-array om den inte finns, annars lägg till mätningen överst
+          const updatedReports = [newAnalysis, ...(p.reports || [])];
+          const updatedUser = { ...p, reports: updatedReports };
+          
+          // Om detta är den valda profilen, uppdatera även selectedProfile-statet
+          if (selectedProfile?.id === profileId) {
+            setSelectedProfile(updatedUser);
+          }
+          return updatedUser;
+        }
+        return p;
+      });
+      return updatedProfiles;
+    });
+  };
+
   // 1. Load profiles from storage on app start
   useEffect(() => {
     const loadProfiles = async () => {
@@ -122,12 +143,17 @@ export default function App() {
       {currentScreen === 'ReportGenerator' && (
         <ReportGeneratorView navigation={{ navigate }} vm={analysisVM} />
       )}
+      
 
       {currentScreen === 'Capture' && (
         <CaptureScreen 
           navigation={{ navigate }} 
-          // Skicka med den valda profilen som en parameter
-          route={{ params: { returnToProfile: selectedProfile } }} 
+          route={{ 
+            params: { 
+              returnToProfile: selectedProfile,
+              onSaveAnalysis: addAnalysisToProfile // LÄGG TILL DENNA RAD
+            } 
+          }} 
         />
       )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,9 @@ const ProfileView = ({ route, navigation }) => {
     onUpdate(editData);
     setIsEditing(false);
   };
+  useEffect(() => {
+    setEditData(profile);
+  }, [profile]);
 
   return (
     <View style={styles.container}>
@@ -147,9 +150,47 @@ const ProfileView = ({ route, navigation }) => {
             <Text style={styles.sectionHeader}>Previous Videos/Reports</Text>
             
             {/* Här kan du mappa din historik senare */}
-            <Text style={{ color: '#999', textAlign: 'center', marginTop: 10 }}>
-              Inga tidigare rapporter hittades.
-            </Text>
+            <View style={styles.reportsList}>
+              {editData.reports && editData.reports.length > 0 ? (
+                editData.reports.map((report) => (
+                  <TouchableOpacity 
+                    key={report.id} 
+                    style={styles.reportCard}
+                    onPress={() => {
+                      // Vi skickar med hela rapport-objektet till Capture-skärmen
+                      navigation.navigate('Capture', { 
+                        returnToProfile: editData,
+                        playbackReport: report // Detta skickar med ritdata och ljud
+                      });
+                    }}
+                  >
+                    <View style={styles.reportIconWrapper}>
+                      <Ionicons 
+                        name={report.type.includes("Drawing") ? "brush" : "videocam"} 
+                        size={20} 
+                        color="#007AFF" 
+                      />
+                    </View>
+                    
+                    <View style={styles.reportInfo}>
+                      <Text style={styles.reportTitle}>
+                        {report.type}
+                      </Text>
+                      <Text style={styles.reportDate}>
+                        {report.date} • {report.time}
+                      </Text>
+                    </View>
+
+                    <Ionicons name="chevron-forward" size={18} color="#ADB5BD" />
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="document-text-outline" size={40} color="#E9ECEF" />
+                  <Text style={styles.emptyStateText}>Inga sparade analyser ännu.</Text>
+                </View>
+              )}
+            </View>
           </View>
         )}
       </ScrollView>
@@ -261,6 +302,27 @@ const styles = StyleSheet.create({
   reportInfo: { flex: 1 },
   reportTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
   reportDate: { fontSize: 12, color: '#ADB5BD', marginTop: 2 },
+  reportsList: {
+    paddingBottom: 40, // Ger lite andrum längst ner i ScrollViewn
+  },
+  
+  // Styla Empty State (när inga rapporter finns)
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 20,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#ADB5BD',
+  },
+  emptyStateText: {
+    marginTop: 10,
+    color: '#ADB5BD',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 export default ProfileView;
