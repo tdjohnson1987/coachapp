@@ -94,18 +94,29 @@ export default function App() {
           route={{
             params: {
               profile: selectedProfile,
-              onUpdate: (updated) =>
+              onUpdate: (updated) => {
                 setProfiles(prev =>
                   prev.map(p => (p.id === updated.id ? updated : p)),
-                ),
+                );
+                // Uppdatera även det valda profil-statet så vyn inte hoppar tillbaka till gammal data
+                setSelectedProfile(updated); 
+              },
             },
           }}
-          navigation={{ goBack: () => setCurrentScreen('Selection') }}
+          // FIX: Lägg till navigate här så ProfileView kan använda den
+          navigation={{ 
+            goBack: () => setCurrentScreen('Selection'),
+            navigate: navigate 
+          }}
         />
       )}
 
       {currentScreen === 'VideoAnalysis' && (
-        <VideoAnalyzerView navigation={{ navigate }} vm={analysisVM} />
+        <VideoAnalyzerView 
+          navigation={{ navigate }} 
+          vm={analysisVM} 
+          route={{ params: { returnToProfile: selectedProfile } }} 
+        />
       )}
 
       {currentScreen === 'ReportGenerator' && (
@@ -113,7 +124,11 @@ export default function App() {
       )}
 
       {currentScreen === 'Capture' && (
-        <CaptureScreen navigation={{ navigate }} />
+        <CaptureScreen 
+          navigation={{ navigate }} 
+          // Skicka med den valda profilen som en parameter
+          route={{ params: { returnToProfile: selectedProfile } }} 
+        />
       )}
 
     </View>

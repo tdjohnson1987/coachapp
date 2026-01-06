@@ -13,7 +13,19 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 
-const VideoAnalyzerView = ({ navigation, vm }) => {
+const VideoAnalyzerView = ({ navigation, vm, route }) => {
+  const returnProfile = route?.params?.returnToProfile;
+
+  const handleBack = () => {
+      if (returnProfile) {
+          // Gå tillbaka till profilen
+          navigation.navigate("Profile", { profile: returnProfile });
+      } else {
+          // Om ingen profil finns (t.ex. om man gick hit direkt från Home)
+          navigation.navigate("Home");
+      }
+  };
+
   const {
     videoFile,
     videoMeta,
@@ -110,21 +122,20 @@ const VideoAnalyzerView = ({ navigation, vm }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Home')}
-          style={styles.iconButton}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Videoanalys</Text>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate('ReportGenerator')}
-          style={styles.saveBtn}
-        >
-          <Ionicons name="document-text-outline" size={18} color="#FFF" />
-        </TouchableOpacity>
+          <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
+              <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+          </TouchableOpacity>
+                
+          <View style={{ alignItems: 'center' }}>
+              <Text style={styles.headerTitle}>Video Analysis</Text>
+              {returnProfile && (
+                  <Text style={{ fontSize: 12, color: '#666', fontWeight: '600' }}>
+                      Analyzing: {returnProfile.name}
+                  </Text>
+              )}
+          </View>
+                
+          <View style={{ width: 32 }} />
       </View>
 
       <View style={styles.content}>

@@ -5,7 +5,18 @@ import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
 import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
 
-const CaptureScreen = ({ navigation }) => {
+const CaptureScreen = ({ navigation, route }) => {
+    const returnProfile = route?.params?.returnToProfile;
+
+    const handleBack = () => {
+        if (returnProfile) {
+            // Gå tillbaka till profilen
+            navigation.navigate("Profile", { profile: returnProfile });
+        } else {
+            // Om ingen profil finns (t.ex. om man gick hit direkt från Home)
+            navigation.navigate("Home");
+        }
+    };
     // Ritdata: varje stroke = lista av punkter {x,y} och ev timestamp
     const [strokes, setStrokes] = useState([]); // [{ id, points: [{x,y,t}] }]
     const [currentStroke, setCurrentStroke] = useState(null);
@@ -515,10 +526,19 @@ const CaptureScreen = ({ navigation }) => {
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.navigate("Home")} style={styles.iconButton}>
+                <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
                     <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Capture</Text>
+                
+                <View style={{ alignItems: 'center' }}>
+                    <Text style={styles.headerTitle}>Capture</Text>
+                    {returnProfile && (
+                        <Text style={{ fontSize: 12, color: '#666', fontWeight: '600' }}>
+                            Analyzing: {returnProfile.name}
+                        </Text>
+                    )}
+                </View>
+                
                 <View style={{ width: 32 }} />
             </View>
 
