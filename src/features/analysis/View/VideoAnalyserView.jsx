@@ -17,13 +17,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
   const returnProfile = route?.params?.returnToProfile;
 
   const handleBack = () => {
-      if (returnProfile) {
-          // Gå tillbaka till profilen
-          navigation.navigate("Profile", { profile: returnProfile });
-      } else {
-          // Om ingen profil finns (t.ex. om man gick hit direkt från Home)
-          navigation.navigate("Home");
-      }
+    if (returnProfile) {
+      navigation.navigate('Profile', { profile: returnProfile });
+    } else {
+      navigation.navigate('Home');
+    }
   };
 
   const {
@@ -43,7 +41,6 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
   const [currentStroke, setCurrentStroke] = useState(null);
   const [strokes, setStrokes] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
-
 
   const panResponder = useRef(
     PanResponder.create({
@@ -69,7 +66,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         setStrokes((prev) => [...prev, currentStroke]);
         setCurrentStroke(null);
       },
-    })
+    }),
   ).current;
 
   const handlePickVideo = async () => {
@@ -79,15 +76,14 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     });
 
     if (result.canceled) return;
-
     const file = result.assets[0];
 
-    // Stoppa tidigare video och rensa ritning när ny video väljs
     try {
       await videoRef.current?.stopAsync?.();
-    } catch (e) {
-      // ignoreras om ingen video körs
+    } catch {
+      // ignore if not playing
     }
+
     setStrokes([]);
     setCurrentStroke(null);
 
@@ -118,37 +114,51 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     );
   };
 
+  const handlePlayPause = async () => {
+    if (!videoRef.current) return;
+
+    if (isPlaying) {
+      await videoRef.current.pauseAsync();
+      setIsPlaying(false);
+    } else {
+      await videoRef.current.playAsync();
+      setIsPlaying(true);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
-              <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-                
-          <View style={{ alignItems: 'center' }}>
-              <Text style={styles.headerTitle}>Video Analysis</Text>
-              {returnProfile && (
-                  <Text style={{ fontSize: 12, color: '#666', fontWeight: '600' }}>
-                      Analyzing: {returnProfile.name}
-                  </Text>
-              )}
-          </View>
-                
-          <View style={{ width: 32 }} />
+        <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
+          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle}>Video Analysis</Text>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ReportGenerator')}
+          style={styles.saveBtn}
+        >
+          <Ionicons name="document-text-outline" size={18} color="#FFF" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
+        {returnProfile && (
+          <Text style={{ marginBottom: 8, color: '#6C757D' }}>
+            Analyserar: {returnProfile.name}
+          </Text>
+        )}
+
         {/* Video card */}
         <View style={styles.card}>
           <Text style={styles.label}>Videokälla</Text>
-
           <TouchableOpacity style={styles.primaryButton} onPress={handlePickVideo}>
             <Text style={styles.primaryButtonText}>
               {videoMeta ? 'Byt video' : 'Välj video'}
             </Text>
           </TouchableOpacity>
-
           <Text style={styles.helperText}>
             {videoMeta ? videoMeta.name : 'Ingen video vald ännu'}
           </Text>
@@ -157,30 +167,14 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             {videoFile ? (
               <>
                 {Platform.OS === 'web' ? (
-                  <View style={{ flex: 1 }}>
-                    {!isPlaying ? (
-                      <>
-                        <video
-                          src={videoFile.uri}
-                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                          preload="metadata"
-                        />
-                        <TouchableOpacity
-                          style={styles.playOverlay}
-                          onPress={() => setIsPlaying(true)}
-                        >
-                          <Ionicons name="play-circle" size={72} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <video
-                        src={videoFile.uri}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                        controls
-                        autoPlay
-                      />
-                    )}
-                  </View>
+                  <Video
+                    ref={videoRef}
+                    source={{ uri: videoFile.uri }}
+                    style={styles.video}
+                    useNativeControls
+                    resizeMode="contain"
+                    onPlaybackStatusUpdate={(status) => setIsPlaying(status.isPlaying)}
+                  />
                 ) : (
                   <>
                     <Video
@@ -188,20 +182,22 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                       source={{ uri: videoFile.uri }}
                       style={styles.video}
                       resizeMode="contain"
-                      useNativeControls={isPlaying}
-                      shouldPlay={isPlaying}
+                      onPlaybackStatusUpdate={(status) =>
+                        setIsPlaying(status.isPlaying)
+                      }
                     />
                     {!isPlaying && (
                       <TouchableOpacity
                         style={styles.playOverlay}
-                        onPress={() => setIsPlaying(true)}
+                        onPress={handlePlayPause}
                       >
-                        <Ionicons name="play-circle" size={72} color="#FFFFFF" />
+                        <Ionicons name="play-circle" size={64} color="#FFF" />
                       </TouchableOpacity>
                     )}
                   </>
                 )}
 
+                {/* Drawing overlay */}
                 <View style={styles.drawingOverlay} {...panResponder.panHandlers}>
                   <Text style={styles.overlayInfo}>Linjer: {strokes.length}</Text>
                 </View>
@@ -216,15 +212,17 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             )}
           </View>
 
-
-
-
           <View style={styles.inlineRow}>
             <Text style={styles.metaText}>
               {videoMeta ? `${Math.round(videoMeta.size / 1024 / 1024)} MB` : ''}
             </Text>
             <TouchableOpacity onPress={handleClearDrawing} disabled={!videoFile}>
-              <Text style={[styles.clearText, !videoFile && styles.clearTextDisabled]}>
+              <Text
+                style={[
+                  styles.clearText,
+                  !videoFile && styles.clearTextDisabled,
+                ]}
+              >
                 Rensa ritning
               </Text>
             </TouchableOpacity>
@@ -259,7 +257,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             Rapport: {report ? 'Skapad' : 'Ej skapad'}
           </Text>
           {loading && <Text style={styles.statusText}>Bearbetar...</Text>}
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {error && <Text style={styles.errorText}>{String(error)}</Text>}
         </View>
       </View>
     </View>
@@ -268,7 +266,6 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
-
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -381,15 +378,14 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   statusText: { fontSize: 14, color: '#343A40', marginTop: 2 },
-
   errorText: { fontSize: 14, color: '#DC3545', marginTop: 4 },
+
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
-
 });
 
 export default VideoAnalyzerView;
