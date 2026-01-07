@@ -1,18 +1,23 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert  } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Alert,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
-import DrawingToolbar from "../../../components/drawing/DrawingToolbar";
-
-
-import useCaptureVM from "../ViewModel/useCaptureVM";
 
 const CaptureScreen = ({ navigation, route, vm }) => {
   const returnProfile = route?.params?.returnToProfile;
   const profile = returnProfile || route?.params?.profile;
   const onSaveAnalysis = route?.params?.onSaveAnalysis;
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
 
   const { addCaptureNote, generateAndSaveReport } = vm;
+  const events = vm?.recordedEvents ?? [];
 
   const handleSaveNote = (currentImageUri, currentText) => {
     if (!currentImageUri && !currentText) return;
@@ -29,26 +34,21 @@ const CaptureScreen = ({ navigation, route, vm }) => {
     if (!returnProfile || !onSave) return;
 
     Alert.alert(
-      'Are you done?',
-      "Do you want to save this analysis to " +
-        returnProfile.name +
-        "'s profile?",
+      "Are you done?",
+      "Do you want to save this analysis to " + returnProfile.name + "'s profile?",
       [
-        { text: 'No', style: 'cancel' },
+        { text: "No", style: "cancel" },
         {
-          text: 'Yes, save',
+          text: "Yes, save",
           onPress: () => {
             const success = vm.saveAnalysis
               ? vm.saveAnalysis(returnProfile.id, onSave)
               : true;
 
             if (success) {
-              navigation.navigate('Profile', { profile: returnProfile });
+              navigation.navigate("Profile", { profile: returnProfile });
             } else {
-              Alert.alert(
-                'Error',
-                'Nothing to save. Please record something first.',
-              );
+              Alert.alert("Error", "Nothing to save. Please record something first.");
             }
           },
         },
@@ -58,16 +58,16 @@ const CaptureScreen = ({ navigation, route, vm }) => {
 
   const handleBack = () => {
     if (returnProfile) {
-      navigation.navigate('Profile', { profile: returnProfile });
+      navigation.navigate("Profile", { profile: returnProfile });
     } else {
-      navigation.navigate('Home');
+      navigation.navigate("Home");
     }
   };
 
   const handleSaveReport = async () => {
     if (!profile) return;
     await generateAndSaveReport();
-    navigation.navigate('ReportGenerator', { profile });
+    navigation.navigate("ReportGenerator", { profile });
   };
 
   const viewW = vm?.canvasSize?.w ?? 0;
@@ -81,12 +81,10 @@ const CaptureScreen = ({ navigation, route, vm }) => {
           <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
         </TouchableOpacity>
 
-        <View style={{ alignItems: 'center' }}>
+        <View style={{ alignItems: "center" }}>
           <Text style={styles.headerTitle}>Capture</Text>
           {returnProfile && (
-            <Text
-              style={{ fontSize: 12, color: '#666', fontWeight: '600' }}
-            >
+            <Text style={{ fontSize: 12, color: "#666", fontWeight: "600" }}>
               Analyzing: {returnProfile.name}
             </Text>
           )}
@@ -109,9 +107,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
                 style={[styles.pill, active && styles.pillActive]}
                 onPress={() => vm.chooseBuiltIn(plan.id)}
               >
-                <Text
-                  style={[styles.pillText, active && styles.pillTextActive]}
-                >
+                <Text style={[styles.pillText, active && styles.pillTextActive]}>
                   {plan.label}
                 </Text>
               </TouchableOpacity>
@@ -119,37 +115,144 @@ const CaptureScreen = ({ navigation, route, vm }) => {
           })}
         </View>
 
-        <TouchableOpacity
-          style={styles.uploadBtn}
-          onPress={vm.pickCustomImage}
-        >
+        <TouchableOpacity style={styles.uploadBtn} onPress={vm.pickCustomImage}>
           <Ionicons name="image-outline" size={18} color="#FFF" />
           <Text style={styles.btnText}>Ladda upp egen bild</Text>
         </TouchableOpacity>
 
         <Text style={styles.helper}>
           {vm.customImageUri
-            ? 'Egen bild vald'
+            ? "Egen bild vald"
             : `Vald plan: ${vm.selectedPlanLabel}`}
         </Text>
 
-                <DrawingToolbar
-                    tool={vm.tool}
-                    setTool={vm.setTool}
-                    color={vm.color}
-                    setColor={vm.setColor}
-                    strokeWidth={vm.strokeWidth}
-                    setStrokeWidth={vm.setStrokeWidth}
-                    onUndo={vm.handleUndo}
-                />
+        {/* Toolbar */}
+        <View style={styles.toolbar}>
+          {/* Tools */}
+          <View style={styles.toolRow}>
+            <TouchableOpacity
+              style={[styles.toolBtn, vm.tool === "pen" && styles.toolBtnActive]}
+              onPress={() => vm.setTool("pen")}
+            >
+              <Ionicons
+                name="pencil"
+                size={18}
+                color={vm.tool === "pen" ? "#FFF" : "#1A1A1A"}
+              />
+            </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.toolBtn, vm.tool === "line" && styles.toolBtnActive]}
+              onPress={() => vm.setTool("line")}
+            >
+              <Ionicons
+                name="remove"
+                size={22}
+                color={vm.tool === "line" ? "#FFF" : "#1A1A1A"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.toolBtn,
+                vm.tool === "circle" && styles.toolBtnActive,
+              ]}
+              onPress={() => vm.setTool("circle")}
+            >
+              <Ionicons
+                name="ellipse-outline"
+                size={18}
+                color={vm.tool === "circle" ? "#FFF" : "#1A1A1A"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.toolBtn,
+                vm.tool === "player" && styles.toolBtnActive,
+              ]}
+              onPress={() => vm.setTool("player")}
+            >
+              <Ionicons
+                name="ellipse"
+                size={18}
+                color={vm.tool === "player" ? "#FFF" : "#1A1A1A"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.toolBtn, vm.tool === "arrow" && styles.toolBtnActive]}
+              onPress={() => vm.setTool("arrow")}
+            >
+              <Ionicons
+                name="arrow-forward"
+                size={18}
+                color={vm.tool === "arrow" ? "#FFF" : "#1A1A1A"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.toolBtn} onPress={vm.handleUndo}>
+              <Ionicons name="arrow-undo" size={18} color="#1A1A1A" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Thickness */}
+          <View style={styles.thicknessRow}>
+            <TouchableOpacity
+              style={styles.smallBtn}
+              onPress={() =>
+                vm.setStrokeWidth((v) => Math.max(2, v - 1))
+              }
+            >
+              <Text style={styles.smallBtnText}>−</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.thicknessText}>{vm.strokeWidth}px</Text>
+
+            <TouchableOpacity
+              style={styles.smallBtn}
+              onPress={() =>
+                vm.setStrokeWidth((v) => Math.min(12, v + 1))
+              }
+            >
+              <Text style={styles.smallBtnText}>+</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Colors */}
+          <View style={styles.colorRow}>
+            {[
+              "#FFFFFF",
+              "#FF3B30",
+              "#34C759",
+              "#007AFF",
+              "#FFCC00",
+              "#AF52DE",
+              "#000000",
+            ].map((c) => (
+              <TouchableOpacity
+                key={c}
+                onPress={() => vm.setColor(c)}
+                style={[
+                  styles.colorDot,
+                  { backgroundColor: c },
+                  vm.color === c && styles.colorDotActive,
+                  c === "#FFFFFF" && {
+                    borderWidth: 1,
+                    borderColor: "#CED4DA",
+                  },
+                ]}
+              />
+            ))}
+          </View>
+        </View>
 
         {/* Canvas */}
         <View
           style={styles.pitchWrapper}
           onLayout={(e) => {
             const { width, height } = e.nativeEvent.layout;
-            vm.setCanvasSize({ w: width || 0, h: height || 0 });
+            setCanvasSize({ w: width || 0, h: height || 0 });
           }}
           {...vm.panHandlers}
         >
@@ -175,17 +278,17 @@ const CaptureScreen = ({ navigation, route, vm }) => {
             pointerEvents="none"
           >
             {(vm?.allToRender ?? []).map((s) => {
-              const type = s.type || 'pen';
-              const stroke = s.color || '#FFFFFF';
+              const type = s.type || "pen";
+              const stroke = s.color || "#FFFFFF";
               const w = s.width || 4;
 
-              if (type === 'pen') {
+              if (type === "pen") {
                 return (
                   <Polyline
                     key={s.id}
                     points={(s.points || [])
                       .map((p) => `${p.x},${p.y}`)
-                      .join(' ')}
+                      .join(" ")}
                     fill="none"
                     stroke={stroke}
                     strokeWidth={w}
@@ -195,7 +298,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
                 );
               }
 
-              if (type === 'line') {
+              if (type === "line") {
                 return (
                   <Line
                     key={s.id}
@@ -210,7 +313,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
                 );
               }
 
-              if (type === 'circle') {
+              if (type === "circle") {
                 return (
                   <Circle
                     key={s.id}
@@ -224,7 +327,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
                 );
               }
 
-              if (type === 'player') {
+              if (type === "player") {
                 return (
                   <Circle
                     key={s.id}
@@ -238,7 +341,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
                 );
               }
 
-              if (type === 'arrow') {
+              if (type === "arrow") {
                 const headPoints = vm.getArrowHead(
                   s.x1,
                   s.y1,
@@ -268,8 +371,8 @@ const CaptureScreen = ({ navigation, route, vm }) => {
 
           <View style={styles.overlayInfo} pointerEvents="none">
             <Text style={styles.overlayText}>
-              {vm.isRecording ? '• REC' : ''}{' '}
-              {vm.isPlaying ? '• PLAY' : ''}
+              {vm.isRecording ? "• REC" : ""}{" "}
+              {vm.isPlaying ? "• PLAY" : ""}
             </Text>
           </View>
         </View>
@@ -298,10 +401,10 @@ const CaptureScreen = ({ navigation, route, vm }) => {
             <TouchableOpacity
               style={[
                 styles.btnGreen,
-                vm.recordedEvents.length === 0 && styles.btnDisabled,
+                events.length === 0 && styles.btnDisabled,
               ]}
               onPress={vm.startPlayback}
-              disabled={vm.recordedEvents.length === 0}
+              disabled={events.length === 0}
             >
               <Ionicons name="play" size={18} color="#FFF" />
               <Text style={styles.btnText}>Spela upp</Text>
@@ -317,7 +420,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
           )}
 
           <TouchableOpacity
-            style={[styles.btnBlue, { backgroundColor: '#5856D6' }]}
+            style={[styles.btnBlue, { backgroundColor: "#5856D6" }]}
             onPress={handleSaveReport}
           >
             <Ionicons
@@ -330,27 +433,22 @@ const CaptureScreen = ({ navigation, route, vm }) => {
 
           <TouchableOpacity style={styles.btnGray} onPress={vm.handleClear}>
             <Ionicons name="trash" size={18} color="#1A1A1A" />
-            <Text style={[styles.btnText, { color: '#1A1A1A' }]}>
+            <Text style={[styles.btnText, { color: "#1A1A1A" }]}>
               Rensa
             </Text>
           </TouchableOpacity>
 
-          {(vm.audioUri || vm.recordedEvents.length > 0) &&
-            !vm.isRecording && (
-              <TouchableOpacity
-                style={[styles.btnBlue, { backgroundColor: '#5856D6' }]}
-                onPress={handleSaveAndExit}
-              >
-                <Ionicons
-                  name="cloud-upload"
-                  size={18}
-                  color="#FFF"
-                />
-                <Text style={styles.btnText}>
-                  Spara på {returnProfile?.name.split(' ')[0]}
-                </Text>
-              </TouchableOpacity>
-            )}
+          {(vm.audioUri || events.length > 0) && !vm.isRecording && (
+            <TouchableOpacity
+              style={[styles.btnBlue, { backgroundColor: "#5856D6" }]}
+              onPress={handleSaveAndExit}
+            >
+              <Ionicons name="cloud-upload" size={18} color="#FFF" />
+              <Text style={styles.btnText}>
+                Spara på {returnProfile?.name.split(" ")[0]}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.helper}>
@@ -363,24 +461,24 @@ const CaptureScreen = ({ navigation, route, vm }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF' },
+  container: { flex: 1, backgroundColor: "#FFF" },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
   },
   iconButton: { padding: 5 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#1A1A1A' },
+  headerTitle: { fontSize: 24, fontWeight: "800", color: "#1A1A1A" },
 
   card: {
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderRadius: 18,
     padding: 16,
     marginHorizontal: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -389,132 +487,132 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#6C757D',
+    fontWeight: "700",
+    color: "#6C757D",
     marginBottom: 8,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
 
   pitchWrapper: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#0B6E3A',
-    position: 'relative',
+    overflow: "hidden",
+    backgroundColor: "#0B6E3A",
+    position: "relative",
   },
 
   overlayInfo: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     left: 8,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: "rgba(0,0,0,0.45)",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  overlayText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  overlayText: { color: "#FFF", fontSize: 12, fontWeight: "600" },
 
   controlsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginTop: 12,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   btnBlue: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   btnRed: {
-    backgroundColor: '#DC3545',
+    backgroundColor: "#DC3545",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   btnGreen: {
-    backgroundColor: '#34C759',
+    backgroundColor: "#34C759",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   btnGray: {
-    backgroundColor: '#E9ECEF',
+    backgroundColor: "#E9ECEF",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   btnDisabled: { opacity: 0.5 },
-  btnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  btnText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
 
-  helper: { marginTop: 10, color: '#6C757D', fontSize: 12 },
+  helper: { marginTop: 10, color: "#6C757D", fontSize: 12 },
 
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
 
   pill: {
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: '#F1F3F5',
+    backgroundColor: "#F1F3F5",
   },
-  pillActive: { backgroundColor: '#007AFF' },
-  pillText: { fontSize: 13, color: '#495057', fontWeight: '600' },
-  pillTextActive: { color: '#FFF' },
+  pillActive: { backgroundColor: "#007AFF" },
+  pillText: { fontSize: 13, color: "#495057", fontWeight: "600" },
+  pillTextActive: { color: "#FFF" },
 
   uploadBtn: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
 
   bgImage: {
     ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
 
   noImage: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 16,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   noImageText: {
-    color: '#CED4DA',
+    color: "#CED4DA",
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 8,
   },
 
   toolbar: { marginTop: 10, gap: 10 },
   toolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
 
   thicknessRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
 
@@ -522,29 +620,29 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#E9ECEF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#E9ECEF",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  toolBtnActive: { backgroundColor: '#007AFF' },
+  toolBtnActive: { backgroundColor: "#007AFF" },
 
   smallBtn: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#E9ECEF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#E9ECEF",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  smallBtnText: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
-  thicknessText: { fontWeight: '700', color: '#1A1A1A' },
+  smallBtnText: { fontSize: 20, fontWeight: "800", color: "#1A1A1A" },
+  thicknessText: { fontWeight: "700", color: "#1A1A1A" },
 
-  colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  colorRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   colorDot: { width: 26, height: 26, borderRadius: 13 },
   colorDotActive: {
     transform: [{ scale: 1.15 }],
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: "#1A1A1A",
   },
 });
 
