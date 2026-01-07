@@ -237,7 +237,7 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
                     color="#E9ECEF"
                   />
                   <Text style={styles.emptyStateText}>
-                    Inga sparade analyser ännu.
+                    No analysis saved.
                   </Text>
                 </View>
               )}

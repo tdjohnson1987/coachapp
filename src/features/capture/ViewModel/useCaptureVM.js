@@ -6,7 +6,21 @@ import { builtInPlans, getArrowHead } from "../Model/CaptureService";
 import { AnalysisService } from "../../shared/AnalysisService"
 
 export default function useCaptureVM() {
+    const resetVM = () => {
+        setStrokes([]);
+        setCurrentStroke(null);
+        setRecordedEvents([]);
+        setRecordingBaseStrokes([]);
+        setAudioUri(null);
+        setIsRecording(false);
+        setIsPlaying(false);
+        setPlayheadMs(0);
+        // Valfritt: Återställ även bakgrundsbilden till standard
+        setSelectedPlanId("tom");
+        setCustomImageUri(null);
+    };
     // Ritdata
+
     const [strokes, setStrokes] = useState([]);
     const [currentStroke, setCurrentStroke] = useState(null);
 
@@ -476,29 +490,23 @@ export default function useCaptureVM() {
     
     //========== Saving - lager =========
     const saveAnalysis = (profileId, onSaveCallback) => {
-        // Om du vill ha en säkerhetscheck
         if (recordedEvents.length === 0 && !audioUri) return false;
 
         const analysisSnapshot = {
-            id: Date.now().toString(), // Sträng är säkrare för list-keys
-            type: "Drawing Analysis", // För att ReportListItem ska fungera
+            id: Date.now().toString(),
+            type: "Drawing Analysis", 
             date: new Date().toLocaleDateString(),
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             
-            // KRITISKT: Lägg dessa på toppnivå så AnalysisCanvas hittar dem direkt
+            // Data för uppspelning
             recordedEvents: [...recordedEvents],
-            activeImageSource: activeImageSource, // Denna variabel finns i din VM
+            activeImageSource: activeImageSource, // Innehåller antingen {uri} eller require()
             canvasSize: { ...canvasSize },
             baseStrokes: [...recordingBaseStrokes],
+            audioUri: audioUri, // Säkerställ att denna sträng skickas med!
             
-            // Behåll din gamla struktur om du vill, men ovanstående behövs för visningen
-            composition: {
-                background: customImageUri || selectedPlanId,
-                initialStrokes: recordingBaseStrokes,
-                events: recordedEvents,
-                canvasRatio: canvasSize.w / canvasSize.h
-            },
-            audioUri: audioUri,
+            // Metadata för listan
+            description: `Analysis with ${recordedEvents.length} actions`,
         };
 
         onSaveCallback(profileId, analysisSnapshot);
@@ -529,10 +537,13 @@ export default function useCaptureVM() {
 
         // 5. Hantera bakgrunden (Fixar "ingen bild")
         if (bg) {
-            if (typeof bg === 'string' && (bg.includes('/') || bg.includes('file:'))) {
-                setCustomImageUri(bg);
+            // Om det är en uppladdad bild (den är ett objekt med .uri)
+            if (typeof bg === 'object' && bg.uri) {
+                setCustomImageUri(bg.uri);
                 setSelectedPlanId(null);
-            } else {
+            } 
+            // Om det är en inbyggd plan (den är ett ID eller require-nummer)
+            else {
                 setSelectedPlanId(bg);
                 setCustomImageUri(null);
             }
@@ -581,6 +592,8 @@ export default function useCaptureVM() {
     }, []);
 
     return {
+        //Resetting 
+        resetVM,
         // Plan/bild
         builtInPlans,
         selectedPlanId,

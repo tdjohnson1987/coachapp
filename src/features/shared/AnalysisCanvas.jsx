@@ -5,21 +5,10 @@ import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
 const AnalysisCanvas = ({ 
     allToRender, 
     canvasSize, 
-    activeImageSource, 
-    getArrowHead 
+    getArrowHead
 }) => {
     return (
         <View style={styles.container}>
-            {/* 1. Bakgrundsbilden - MÅSTE vara stretch för att matcha SVG:n */}
-            {activeImageSource && (
-                <Image
-                    source={activeImageSource}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="stretch" // Tvingar bilden att täcka hela rutan (koordinatsystemet)
-                />
-            )}
-
-            {/* 2. SVG-lagret - Låst till canvasSize */}
             <Svg
                 style={StyleSheet.absoluteFill}
                 viewBox={`0 0 ${canvasSize.w} ${canvasSize.h}`}
@@ -76,7 +65,7 @@ const styles = StyleSheet.create({
     container: {
         ...StyleSheet.absoluteFillObject,
         // VIKTIGT: Ta bort justifyContent/alignItems härifrån!
-        backgroundColor: '#000', 
+        backgroundColor: 'transparent', 
         overflow: 'hidden',
     },
 });

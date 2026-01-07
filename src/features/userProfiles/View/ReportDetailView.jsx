@@ -13,11 +13,14 @@ const ReportDetailView = ({ route, navigation }) => {
     if (playbackReport) {
       vm.loadSavedReport(playbackReport);
     }
+    
+    // Rensa när vi lämnar vyn
+    return () => vm.resetVM();
   }, [playbackReport]);
 
   return (
     <View style={styles.container}>
-      {/* Header med bara tillbaka-knapp */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
@@ -27,39 +30,42 @@ const ReportDetailView = ({ route, navigation }) => {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.dateText}>{playbackReport.date} • {playbackReport.time}</Text>
+        <Text style={styles.dateText}>
+          {playbackReport.date} • {playbackReport.time}
+        </Text>
         
-        {/* Själva "Video"-ytan */}
-        <View style={styles.videoArea}
+        {/* Video-ytan (Pitch Wrapper) */}
+        <View 
+          style={styles.pitchWrapperDetail}
           onLayout={(e) => {
             const { width, height } = e.nativeEvent.layout;
-            console.log("Mäter upp ytan till:", width, height); 
             vm.setCanvasSize({ w: width, h: height });
           }}
         >
-          {/* 1. Bakgrundsbilden */}
-          {vm.activeImageSource && (
+          {/* 1. Basbakgrund (Grön färg som i Capture) */}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0B6E3A' }]} />
+
+          {/* 2. Bakgrundsbilden - Fixad för att hindra zoom i hörnet */}
+          {playbackReport.activeImageSource && (
             <Image 
-              source={vm.activeImageSource} 
-              style={StyleSheet.absoluteFill} 
+              key={`bg-${playbackReport.id}`}
+              source={playbackReport.activeImageSource} 
+              style={styles.imageFix} 
               resizeMode="contain" 
             />
           )}
           
-          {/* 2. Rita bara ut canvasen om bredden är större än 1 (alltså efter mätning) */}
-          {vm.canvasSize.w > 1 ? (
+          {/* 3. Canvas-lagret för ritningarna */}
+          {vm.canvasSize.w > 1 && (
             <AnalysisCanvas 
               allToRender={vm.allToRender} 
               canvasSize={vm.canvasSize} 
               getArrowHead={vm.getArrowHead}
-              activeImageSource={vm.activeImageSource}
             />
-          ) : (
-            <View style={StyleSheet.absoluteFill} /> // Tom yta under millisekunden det tar att mäta
           )}
         </View>
 
-        {/* Kontroll för att spela/stoppa ljud och animation */}
+        {/* Kontroller */}
         <TouchableOpacity 
           style={[styles.playButton, vm.isPlaying && styles.stopButton]} 
           onPress={vm.isPlaying ? vm.stopPlayback : vm.startPlayback}
@@ -75,15 +81,71 @@ const ReportDetailView = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, backgroundColor: '#FFF' },
-  headerTitle: { fontSize: 18, fontWeight: '800' },
-  card: { margin: 20, padding: 20, backgroundColor: '#FFF', borderRadius: 25, elevation: 5 },
-  dateText: { color: '#6C757D', marginBottom: 15, fontWeight: '600' },
-  videoArea: { width: '100%', aspectRatio: 16/9, backgroundColor: '#000', borderRadius: 15, overflow: 'hidden' },
-  playButton: { flexDirection: 'row', backgroundColor: '#007AFF', marginTop: 20, padding: 15, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 10 },
-  stopButton: { backgroundColor: '#FF3B30' },
-  playButtonText: { color: '#FFF', fontWeight: '800', fontSize: 16 }
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F8F9FA' 
+  },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 20, 
+    paddingTop: 60, 
+    paddingBottom: 20, 
+    backgroundColor: '#FFF' 
+  },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '800' 
+  },
+  card: { 
+    margin: 20, 
+    padding: 20, 
+    backgroundColor: '#FFF', 
+    borderRadius: 25, 
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5 
+  },
+  dateText: { 
+    color: '#6C757D', 
+    marginBottom: 15, 
+    fontWeight: '600' 
+  },
+  pitchWrapperDetail: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#0B6E3A',
+    position: 'relative', // För att absolutplacerade barn ska hamna rätt
+  },
+  imageFix: {
+    position: 'absolute',
+    width: '100%', // Tvingar bilden att centrera inom hela boxen
+    height: '100%',
+    top: 0,
+    left: 0,
+  },
+  playButton: { 
+    flexDirection: 'row', 
+    backgroundColor: '#007AFF', 
+    marginTop: 20, 
+    padding: 15, 
+    borderRadius: 12, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    gap: 10 
+  },
+  stopButton: { 
+    backgroundColor: '#FF3B30' 
+  },
+  playButtonText: { 
+    color: '#FFF', 
+    fontWeight: '800', 
+    fontSize: 16 
+  },
 });
 
 export default ReportDetailView;

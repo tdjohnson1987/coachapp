@@ -15,7 +15,7 @@ import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
 const CaptureScreen = ({ navigation, route, vm }) => {
   const returnProfile = route?.params?.returnToProfile;
   const profile = returnProfile || route?.params?.profile;
-  const onSaveAnalysis = route?.params?.onSaveAnalysis;
+  const onSave = route?.params?.onSaveAnalysis;
   const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
 
   const { addCaptureNote, generateAndSaveReport } = vm;
@@ -32,7 +32,6 @@ const CaptureScreen = ({ navigation, route, vm }) => {
   };
 
   const handleSaveAndExit = () => {
-    const onSave = route?.params?.onSaveAnalysis;
     if (!returnProfile || !onSave) return;
 
     Alert.alert(
@@ -42,12 +41,14 @@ const CaptureScreen = ({ navigation, route, vm }) => {
         { text: "No", style: "cancel" },
         {
           text: "Yes, save",
-          onPress: () => {
-            const success = vm.saveAnalysis
-              ? vm.saveAnalysis(returnProfile.id, onSave)
-              : true;
+          onPress: async () => {
+            // 1. Spara analysen
+            const success = await vm.saveAnalysis(returnProfile.id, onSave);
 
             if (success) {
+              // 2. Töm VM så att nästa inspelning börjar från noll
+              vm.resetVM(); 
+              // 3. Gå tillbaka till profilen
               navigation.navigate("Profile", { profile: returnProfile });
             } else {
               Alert.alert("Error", "Nothing to save. Please record something first.");
@@ -59,6 +60,8 @@ const CaptureScreen = ({ navigation, route, vm }) => {
   };
 
   const handleBack = () => {
+    // Tömmer allt även när man backar utan att spara
+    vm.resetVM();
     if (returnProfile) {
       navigation.navigate("Profile", { profile: returnProfile });
     } else {
@@ -263,7 +266,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
             <Image
               source={vm.activeImageSource}
               style={styles.bgImage}
-              resizeMode="stretch"
+              resizeMode="contain"
               pointerEvents="none"
             />
           ) : (
