@@ -201,33 +201,12 @@ const ProfileView = ({ route, navigation }) => {
               }}
             >
               <Ionicons name="add-circle" size={24} color="#FFF" />
-              <Text style={styles.createBtnText}>
-                Create new analysis
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.createBtn,
-                { backgroundColor: '#007AFF', marginTop: 16 },
-              ]}
-              onPress={handleOpenReports}
-            >
-              <Ionicons
-                name="document-text-outline"
-                size={22}
-                color="#FFF"
-              />
-              <Text style={styles.createBtnText}>
-                Visa rapportlista
-              </Text>
+              <Text style={styles.createBtnText}>Create new analysis</Text>
             </TouchableOpacity>
 
             <View style={styles.divider} />
 
-            <Text style={styles.sectionHeader}>
-              Previous Videos/Reports
-            </Text>
+            <Text style={styles.sectionHeader}>Previous Videos/Reports</Text>
 
             <View style={styles.reportsList}>
               {editData?.reports && editData.reports.length > 0 ? (
