@@ -70,7 +70,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
 
 
-  const handlePickVideo = async () => {
+  const handlePickVideo = async () => { //
     const result = await DocumentPicker.getDocumentAsync({
       type: ["video/*"],
       copyToCacheDirectory: true,
@@ -200,6 +200,27 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     );
   };
 
+    // expect vm to have addKeyFrame
+  const { addKeyFrame } = vm;
+  // wrap video + overlay in a ViewShot ref
+  const captureRef = useRef(null);
+
+  const handleSaveFrame = async () => {
+    if (!captureRef.current) return;
+
+    const status = await videoRef.current.getStatusAsync();
+    const timeSec = status.positionMillis / 1000;
+
+    const uri = await captureRef.current.capture(); // screenshot
+
+    addKeyFrame({
+      id: Date.now().toString(),
+      time: timeSec,
+      imageUri: uri,
+      strokes,        // your overlay data
+    });
+  };
+
 
 
   return (
@@ -222,10 +243,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         <View style={{ width: 32 }} />
       </View>
 
+      {/* Content */}
       <View style={styles.content}>
-        {returnProfile && (
+        {profile && (
           <Text style={{ marginBottom: 8, color: '#6C757D' }}>
-            Analyserar: {returnProfile.name}
+            Analyserar: {profile.name}
           </Text>
         )}
 

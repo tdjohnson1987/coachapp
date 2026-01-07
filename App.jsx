@@ -19,6 +19,12 @@ export default function App() {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  const goBack = () => {
+    // simplest: always go back to Home (or Profile, if you prefer)
+    setCurrentScreen('Home');
+    setCurrentParams(null);
+  };
 
   // create analysis VM ONCE per app render, not inside JSX
   const analysisVM = useAnalysisVM({
@@ -104,6 +110,7 @@ export default function App() {
     );
   }
 
+   
   return (
     <View style={{ flex: 1 }}>
       {currentScreen === 'Home' && (
@@ -149,7 +156,10 @@ export default function App() {
       )}
 
       {currentScreen === 'ReportGenerator' && (
-        <ReportGeneratorView navigation={{ navigate }} vm={analysisVM} />
+        <ReportGeneratorView
+          navigation={{ navigate }}
+          route={{ params: { profile: selectedProfile } }}
+        />
       )}
 
       {currentScreen === 'ReportDetail' && selectedReport && (
@@ -163,11 +173,12 @@ export default function App() {
     
       {currentScreen === 'Capture' && (
         <CaptureScreen 
-          navigation={{ navigate }} 
+          navigation={{ navigate, goBack }} 
+          vm={analysisVM}
           route={{ 
             params: { 
               returnToProfile: selectedProfile,
-              onSaveAnalysis: addAnalysisToProfile // LÄGG TILL DENNA RAD
+              onSaveAnalysis: addAnalysisToProfile 
             } 
           }} 
         />

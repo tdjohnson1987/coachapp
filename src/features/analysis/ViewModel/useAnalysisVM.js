@@ -12,6 +12,17 @@ export const useAnalysisVM = (context) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const [captureNotes, setCaptureNotes] = useState([]);
+  const [keyFrames, setKeyFrames] = useState([]);
+
+  const [currentAthleteId, setCurrentAthleteId] = useState(null);
+  const [currentCoachId, setCurrentCoachId] = useState(null);
+
+  const useProfileForAnalysis = (coachId, athleteId) => {
+    setCurrentCoachId(coachId);
+    setCurrentAthleteId(athleteId);
+  };
+
   const loadVideo = async (file) => {
     setVideoFile(file);
     const meta = await AnalysisService.loadVideoMetadata(file);
@@ -20,9 +31,38 @@ export const useAnalysisVM = (context) => {
     setFrames(previews);
   };
 
+  const addCaptureNote = (note) => {
+    setCaptureNotes((prev) => [...prev, note]);
+  };
+
+  const addKeyFrame = (frame) => {
+    setKeyFrames((prev) => [...prev, frame]);
+  };
+
+  const generateAndSaveReport = async () => {
+    if (!currentAthleteId || !currentCoachId) return;
+
+    const built = AnalysisService.buildReport({
+      coachId: currentCoachId,
+      athleteId: currentAthleteId,
+      videoMeta,
+      transcription,
+      captureNotes,
+      keyFrames,
+    });
+
+    await AnalysisService.persistReport(built);
+    setReport(built);
+
+    // clear working data for a fresh start
+    setCaptureNotes([]);
+    setKeyFrames([]);
+    return built;
+  };
+
   const toggleFrameSelection = (frameId) => {
     setSelectedFrames((prev) =>
-      prev.includes(frameId) ? prev.filter(id => id !== frameId) : [...prev, frameId]
+      prev.includes(frameId) ? prev.filter((id) => id !== frameId) : [...prev, frameId],
     );
   };
 
@@ -38,19 +78,6 @@ export const useAnalysisVM = (context) => {
     }
   };
 
-  const generateReport = async () => {
-    if (!videoMeta || !transcription) return;
-    const framesForReport = frames.filter(f => selectedFrames.includes(f.id));
-    const built = AnalysisService.buildReport({
-      videoMeta,
-      sttResult: transcription,
-      selectedFrames: framesForReport,
-      context,
-    });
-    setReport(built);
-    await AnalysisService.persistReport(built);
-  };
-
   return {
     // state
     videoFile,
@@ -61,10 +88,17 @@ export const useAnalysisVM = (context) => {
     report,
     loading,
     error,
+    captureNotes,
+    keyFrames,
+
     // actions
     loadVideo,
     toggleFrameSelection,
     runTranscription,
-    generateReport,
+
+    useProfileForAnalysis,
+    addCaptureNote,
+    addKeyFrame,
+    generateAndSaveReport,
   };
 };
