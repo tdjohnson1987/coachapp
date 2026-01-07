@@ -20,6 +20,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
   const videoDrawing = useVideoDrawingVM();
 
   const returnProfile = route?.params?.returnToProfile;
+  const profile = returnProfile || route?.params?.profile;
+
   const handleBack = () => {
     if (returnProfile) navigation.navigate("Profile", { profile: returnProfile });
     else navigation.navigate("Home");
@@ -36,6 +38,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     error,
     loadVideo,
     toggleFrameSelection,
+    addKeyFrame,
   } = vm;
 
   const videoRef = useRef(null);
@@ -50,27 +53,25 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
       ? (videoDrawing?.strokesToRender ?? [])
       : (d?.allToRender ?? d?.strokes ?? []);
 
-
-
-
-  // ✅ Robust adapter (panHandlers + toolbar props)
+  // unified drawing API
   const drawApi = d
     ? {
-      panHandlers: d.panHandlers ?? d.panResponder?.panHandlers ?? d._panResponder?.panHandlers,
-      tool: d.activeTool ?? d.tool,
-      setTool: d.setActiveTool ?? d.setTool,
-      color: d.activeColor ?? d.color,
-      setColor: d.setActiveColor ?? d.setColor,
-      strokeWidth: d.activeWidth ?? d.strokeWidth,
-      setStrokeWidth: d.setActiveWidth ?? d.setStrokeWidth,
-      undo: d.undo,
-      clear: d.clear,
-    }
+        panHandlers:
+          d.panHandlers ??
+          d.panResponder?.panHandlers ??
+          d._panResponder?.panHandlers,
+        tool: d.activeTool ?? d.tool,
+        setTool: d.setActiveTool ?? d.setTool,
+        color: d.activeColor ?? d.color,
+        setColor: d.setActiveColor ?? d.setColor,
+        strokeWidth: d.activeWidth ?? d.strokeWidth,
+        setStrokeWidth: d.setActiveWidth ?? d.setStrokeWidth,
+        undo: d.undo,
+        clear: d.clear,
+      }
     : null;
 
-
-
-  const handlePickVideo = async () => { //
+  const handlePickVideo = async () => {
     const result = await DocumentPicker.getDocumentAsync({
       type: ["video/*"],
       copyToCacheDirectory: true,
@@ -82,9 +83,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
     try {
       await videoRef.current?.stopAsync?.();
-    } catch { }
+    } catch {}
 
-    // reset state
     d?.clear?.();
     videoDrawing.stopPlayback?.();
     videoDrawing.stopRecording?.();
@@ -123,17 +123,18 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     try {
       const st = await videoRef.current?.getStatusAsync?.();
       if (st?.isLoaded) return st.positionMillis ?? 0;
-    } catch { }
+    } catch {}
     return 0;
   };
 
   const toggleRecording = async () => {
     if (!videoFile) return;
 
-    // stoppa playback om den kör
     if (videoDrawing.isPlayback) {
       await videoDrawing.stopPlayback?.();
-      try { await videoRef.current?.pauseAsync?.(); } catch { }
+      try {
+        await videoRef.current?.pauseAsync?.();
+      } catch {}
       setIsPlaying(false);
     }
 
@@ -141,8 +142,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
       const endMs = await getVideoPosMs();
       await videoDrawing.stopRecording?.({ endVideoMs: endMs });
 
-      // “Capture-känsla”: pausa när du stoppar REC
-      try { await videoRef.current?.pauseAsync?.(); } catch { }
+      try {
+        await videoRef.current?.pauseAsync?.();
+      } catch {}
       setIsPlaying(false);
       return;
     }
@@ -150,12 +152,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     const startMs = await getVideoPosMs();
     await videoDrawing.startRecording?.({ startVideoMs: startMs });
 
-    // “Capture-känsla”: börja spela när du startar REC
-    try { await videoRef.current?.playAsync?.(); } catch { }
+    try {
+      await videoRef.current?.playAsync?.();
+    } catch {}
     setIsPlaying(true);
   };
-
-
 
   const togglePlayback = async () => {
     if (!videoFile) return;
@@ -167,7 +168,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
     if (videoDrawing.isPlayback) {
       await videoDrawing.stopPlayback?.();
-      try { await videoRef.current?.pauseAsync?.(); } catch { }
+      try {
+        await videoRef.current?.pauseAsync?.();
+      } catch {}
       setIsPlaying(false);
       return;
     }
@@ -176,15 +179,12 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
       await videoRef.current?.setPositionAsync?.(startMs);
       await videoRef.current?.playAsync?.();
       setIsPlaying(true);
-    } catch { }
+    } catch {}
 
     d?.clear?.();
 
     await videoDrawing.startPlayback?.();
   };
-
-
-
 
   const renderFrameItem = ({ item }) => {
     const isSelected = selectedFrames.includes(item.id);
@@ -200,28 +200,27 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     );
   };
 
-    // expect vm to have addKeyFrame
-  const { addKeyFrame } = vm;
-  // wrap video + overlay in a ViewShot ref
   const captureRef = useRef(null);
 
   const handleSaveFrame = async () => {
-    if (!captureRef.current) return;
+    if (!captureRef.current || !videoRef.current) return;
 
     const status = await videoRef.current.getStatusAsync();
-    const timeSec = status.positionMillis / 1000;
+    if (!status?.isLoaded) return;
 
-    const uri = await captureRef.current.capture(); // screenshot
+    const timeSec = (status.positionMillis ?? 0) / 1000;
+
+    const uri = await captureRef.current.capture();
 
     addKeyFrame({
       id: Date.now().toString(),
       time: timeSec,
       imageUri: uri,
-      strokes,        // your overlay data
+      strokes: strokesForCanvas,
     });
   };
 
-
+  const recordedEvents = videoDrawing?.recordedEvents ?? [];
 
   return (
     <View style={styles.container}>
@@ -233,9 +232,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
         <View style={{ alignItems: "center" }}>
           <Text style={styles.headerTitle}>Video Analysis</Text>
-          {returnProfile && (
-            <Text style={{ fontSize: 12, color: "#666", fontWeight: "600" }}>
-              Analyzing: {returnProfile.name}
+          {profile && (
+            <Text
+              style={{ fontSize: 12, color: "#666", fontWeight: "600" }}
+            >
+              Analyserar: {profile.name}
             </Text>
           )}
         </View>
@@ -245,16 +246,13 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
       {/* Content */}
       <View style={styles.content}>
-        {profile && (
-          <Text style={{ marginBottom: 8, color: '#6C757D' }}>
-            Analyserar: {profile.name}
-          </Text>
-        )}
-
         {/* Video card */}
         <View style={styles.card}>
           <Text style={styles.label}>Videokälla</Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={handlePickVideo}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handlePickVideo}
+          >
             <Text style={styles.primaryButtonText}>
               {videoMeta ? "Byt video" : "Välj video"}
             </Text>
@@ -269,6 +267,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               const { width, height } = e.nativeEvent.layout;
               setCanvasSize({ w: width || 1, h: height || 1 });
             }}
+            ref={captureRef}
           >
             {videoFile ? (
               <>
@@ -300,21 +299,28 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                       const pos = status.positionMillis ?? 0;
                       videoDrawing.setVideoTimeMs?.(pos);
 
-                      const { endMs } = videoDrawing.getClipRange?.() ?? {};
-                      if (videoDrawing.isPlayback && typeof endMs === "number" && pos >= endMs) {
-                        try { await videoRef.current?.pauseAsync?.(); } catch { }
+                      const { endMs } =
+                        videoDrawing.getClipRange?.() ?? {};
+                      if (
+                        videoDrawing.isPlayback &&
+                        typeof endMs === "number" &&
+                        pos >= endMs
+                      ) {
+                        try {
+                          await videoRef.current?.pauseAsync?.();
+                        } catch {}
                         setIsPlaying(false);
                         await videoDrawing.stopPlayback?.();
                       }
                     }}
-
-
-
                   />
                 )}
 
-                {/* Drawing overlay (render-only) */}
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                {/* Drawing overlay */}
+                <View
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                >
                   <DrawingCanvas
                     strokes={strokesForCanvas}
                     width={canvasSize.w}
@@ -323,15 +329,24 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 </View>
 
                 {/* Info */}
-                <View style={styles.overlayInfoBox} pointerEvents="none">
+                <View
+                  style={styles.overlayInfoBox}
+                  pointerEvents="none"
+                >
                   <Text style={styles.overlayInfo}>
                     Objekt: {videoDrawing.strokesToRender?.length ?? 0}
                   </Text>
                 </View>
 
-                {/* Play/Pause overlay (tips: stäng Rita för att kunna trycka på play) */}
-                <View style={styles.playOverlay} pointerEvents="box-none">
-                  <Pressable onPress={togglePlay} style={styles.playButton}>
+                {/* Play overlay */}
+                <View
+                  style={styles.playOverlay}
+                  pointerEvents="box-none"
+                >
+                  <Pressable
+                    onPress={togglePlay}
+                    style={styles.playButton}
+                  >
                     <Ionicons
                       name={isPlaying ? "pause-circle" : "play-circle"}
                       size={72}
@@ -342,14 +357,18 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               </>
             ) : (
               <View style={styles.videoPlaceholder}>
-                <Ionicons name="videocam-outline" size={40} color="#ADB5BD" />
+                <Ionicons
+                  name="videocam-outline"
+                  size={40}
+                  color="#ADB5BD"
+                />
                 <Text style={styles.placeholderText}>
                   Välj en video för att börja analysera
                 </Text>
               </View>
             )}
 
-            {/* Touch-layer för ritning */}
+            {/* touch layer for drawing */}
             {!!videoFile && !!drawApi?.panHandlers && drawMode && (
               <View
                 style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
@@ -357,28 +376,41 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 {...drawApi.panHandlers}
               />
             )}
-
           </View>
 
           {/* Meta + clear */}
           <View style={styles.inlineRow}>
             <Text style={styles.metaText}>
-              {videoMeta ? `${Math.round(videoMeta.size / 1024 / 1024)} MB` : ""}
+              {videoMeta
+                ? `${Math.round(videoMeta.size / 1024 / 1024)} MB`
+                : ""}
             </Text>
 
-            <TouchableOpacity onPress={drawApi?.clear} disabled={!videoFile || !drawApi}>
-              <Text style={[styles.clearText, (!videoFile || !d) && styles.clearTextDisabled]}>
+            <TouchableOpacity
+              onPress={drawApi?.clear}
+              disabled={!videoFile || !drawApi}
+            >
+              <Text
+                style={[
+                  styles.clearText,
+                  (!videoFile || !d) && styles.clearTextDisabled,
+                ]}
+              >
                 Rensa ritning
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Controls: REC + PLAYBACK + Rita */}
+          {/* Controls */}
           <View style={styles.controlsRow}>
             <TouchableOpacity
               style={[
                 styles.controlBtn,
-                { backgroundColor: videoDrawing.isRecording ? "#DC3545" : "#34C759" },
+                {
+                  backgroundColor: videoDrawing.isRecording
+                    ? "#DC3545"
+                    : "#34C759",
+                },
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
@@ -393,9 +425,10 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               style={[
                 styles.controlBtn,
                 { backgroundColor: "#6F42C1" },
-                (!videoFile || !videoDrawing.recordedEvents?.length) && styles.controlBtnDisabled,
+                (!videoFile || recordedEvents.length === 0) &&
+                  styles.controlBtnDisabled,
               ]}
-              disabled={!videoFile || !videoDrawing.recordedEvents?.length}
+              disabled={!videoFile || recordedEvents.length === 0}
               onPress={togglePlayback}
             >
               <Text style={styles.controlBtnText}>
@@ -412,7 +445,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               disabled={!videoFile}
               onPress={() => setDrawMode((v) => !v)}
             >
-              <Text style={styles.controlBtnText}>{drawMode ? "Rita: PÅ" : "Rita: AV"}</Text>
+              <Text style={styles.controlBtnText}>
+                {drawMode ? "Rita: PÅ" : "Rita: AV"}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -429,14 +464,30 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             />
           )}
 
-
+          {/* Optional: button to capture current frame */}
+          {videoFile && (
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                {
+                  backgroundColor: "#198754",
+                  marginTop: 10,
+                },
+              ]}
+              onPress={handleSaveFrame}
+            >
+              <Text style={styles.controlBtnText}>Spara nyckelframe</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Key frames + status */}
         <View style={styles.card}>
           <Text style={styles.label}>Nyckelframes</Text>
           {frames.length === 0 ? (
-            <Text style={styles.helperText}>Inga frames ännu (kommer från analys-steget).</Text>
+            <Text style={styles.helperText}>
+              Inga frames ännu (kommer från analys-steget).
+            </Text>
           ) : (
             <FlatList
               horizontal
@@ -451,10 +502,18 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           <View style={styles.divider} />
 
           <Text style={styles.label}>Status</Text>
-          <Text style={styles.statusText}>Transkription: {transcription ? "Klar" : "Ej påbörjad"}</Text>
-          <Text style={styles.statusText}>Rapport: {report ? "Skapad" : "Ej skapad"}</Text>
-          {loading && <Text style={styles.statusText}>Bearbetar...</Text>}
-          {error && <Text style={styles.errorText}>{String(error)}</Text>}
+          <Text style={styles.statusText}>
+            Transkription: {transcription ? "Klar" : "Ej påbörjad"}
+          </Text>
+          <Text style={styles.statusText}>
+            Rapport: {report ? "Skapad" : "Ej skapad"}
+          </Text>
+          {loading && (
+            <Text style={styles.statusText}>Bearbetar...</Text>
+          )}
+          {error && (
+            <Text style={styles.errorText}>{String(error)}</Text>
+          )}
         </View>
       </View>
     </View>
