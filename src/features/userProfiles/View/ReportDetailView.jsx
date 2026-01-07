@@ -8,13 +8,13 @@ const ReportDetailView = ({ route, navigation }) => {
   const { playbackReport } = route.params;
   const vm = useCaptureVM();
 
-  // Ladda in inspelningen direkt när vi öppnar skärmen
+  // Load the recording immediately when opening the screen
   useEffect(() => {
     if (playbackReport) {
       vm.loadSavedReport(playbackReport);
     }
     
-    // Rensa när vi lämnar vyn
+    // Clear VM when leaving the view to ensure a fresh state
     return () => vm.resetVM();
   }, [playbackReport]);
 
@@ -25,7 +25,10 @@ const ReportDetailView = ({ route, navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Analysuppspelning</Text>
+        <Text style={styles.headerTitle}>
+          {playbackReport.title || "Analysis Playback"}
+        </Text>
+        {/* Spacer for header balance */}
         <View style={{ width: 24 }} />
       </View>
 
@@ -34,7 +37,7 @@ const ReportDetailView = ({ route, navigation }) => {
           {playbackReport.date} • {playbackReport.time}
         </Text>
         
-        {/* Video-ytan (Pitch Wrapper) */}
+        {/* Video Area (Pitch Wrapper) */}
         <View 
           style={styles.pitchWrapperDetail}
           onLayout={(e) => {
@@ -42,10 +45,10 @@ const ReportDetailView = ({ route, navigation }) => {
             vm.setCanvasSize({ w: width, h: height });
           }}
         >
-          {/* 1. Basbakgrund (Grön färg som i Capture) */}
+          {/* 1. Base Background (Green color as in Capture) */}
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0B6E3A' }]} />
 
-          {/* 2. Bakgrundsbilden - Fixad för att hindra zoom i hörnet */}
+          {/* 2. Background Image - Fixed to prevent top-left corner zoom */}
           {playbackReport.activeImageSource && (
             <Image 
               key={`bg-${playbackReport.id}`}
@@ -55,7 +58,7 @@ const ReportDetailView = ({ route, navigation }) => {
             />
           )}
           
-          {/* 3. Canvas-lagret för ritningarna */}
+          {/* 3. Canvas Layer for drawings */}
           {vm.canvasSize.w > 1 && (
             <AnalysisCanvas 
               allToRender={vm.allToRender} 
@@ -65,14 +68,14 @@ const ReportDetailView = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Kontroller */}
+        {/* Controls */}
         <TouchableOpacity 
           style={[styles.playButton, vm.isPlaying && styles.stopButton]} 
           onPress={vm.isPlaying ? vm.stopPlayback : vm.startPlayback}
         >
           <Ionicons name={vm.isPlaying ? "square" : "play"} size={24} color="#FFF" />
           <Text style={styles.playButtonText}>
-            {vm.isPlaying ? "Stoppa" : "Spela upp video"}
+            {vm.isPlaying ? "Stop" : "Play Video"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -119,11 +122,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#0B6E3A',
-    position: 'relative', // För att absolutplacerade barn ska hamna rätt
+    position: 'relative',
   },
   imageFix: {
     position: 'absolute',
-    width: '100%', // Tvingar bilden att centrera inom hela boxen
+    width: '100%',
     height: '100%',
     top: 0,
     left: 0,

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import ReportListItem from '../Model/ReportListItem';
+import ReportListItem from './ReportListItem';
 import { useProfileVM } from '../ViewModel/useProfileVM';
 
 const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{

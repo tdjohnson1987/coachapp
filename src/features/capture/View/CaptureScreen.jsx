@@ -10,8 +10,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
 
-
-
 const CaptureScreen = ({ navigation, route, vm }) => {
   const returnProfile = route?.params?.returnToProfile;
   const profile = returnProfile || route?.params?.profile;
@@ -34,33 +32,31 @@ const CaptureScreen = ({ navigation, route, vm }) => {
   const handleSaveAndExit = () => {
     if (!returnProfile || !onSave) return;
 
-    Alert.alert(
-      "Are you done?",
-      "Do you want to save this analysis to " + returnProfile.name + "'s profile?",
+    // Use prompt to ask for a name (Note: prompt works primarily on iOS)
+    Alert.prompt(
+      "Name analysis",
+      "Enter a name for this recording:",
       [
-        { text: "No", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
-          text: "Yes, save",
-          onPress: async () => {
-            // 1. Spara analysen
-            const success = await vm.saveAnalysis(returnProfile.id, onSave);
+          text: "Save",
+          onPress: async (title) => {
+            const finalTitle = title || "Untitled Analysis";
+            const success = await vm.saveAnalysis(returnProfile.id, onSave, finalTitle);
 
             if (success) {
-              // 2. Töm VM så att nästa inspelning börjar från noll
               vm.resetVM(); 
-              // 3. Gå tillbaka till profilen
               navigation.navigate("Profile", { profile: returnProfile });
-            } else {
-              Alert.alert("Error", "Nothing to save. Please record something first.");
             }
           },
         },
       ],
+      "plain-text"
     );
   };
 
   const handleBack = () => {
-    // Tömmer allt även när man backar utan att spara
+    // Clear everything even when backing out without saving
     vm.resetVM();
     if (returnProfile) {
       navigation.navigate("Profile", { profile: returnProfile });
@@ -99,7 +95,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Plan / stillbild</Text>
+        <Text style={styles.label}>Pitch / Still Image</Text>
 
         {/* Plan pills */}
         <View style={styles.row}>
@@ -123,13 +119,13 @@ const CaptureScreen = ({ navigation, route, vm }) => {
 
         <TouchableOpacity style={styles.uploadBtn} onPress={vm.pickCustomImage}>
           <Ionicons name="image-outline" size={18} color="#FFF" />
-          <Text style={styles.btnText}>Ladda upp egen bild</Text>
+          <Text style={styles.btnText}>Upload custom image</Text>
         </TouchableOpacity>
 
         <Text style={styles.helper}>
           {vm.customImageUri
-            ? "Egen bild vald"
-            : `Vald plan: ${vm.selectedPlanLabel}`}
+            ? "Custom image selected"
+            : `Selected pitch: ${vm.selectedPlanLabel}`}
         </Text>
 
         {/* Toolbar */}
@@ -273,7 +269,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
             <View style={styles.noImage} pointerEvents="none">
               <Ionicons name="image-outline" size={40} color="#ADB5BD" />
               <Text style={styles.noImageText}>
-                Välj en plan eller ladda upp en bild
+                Select a pitch or upload an image
               </Text>
             </View>
           )}
@@ -391,7 +387,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
               onPress={vm.startRecording}
             >
               <Ionicons name="radio-button-on" size={18} color="#FFF" />
-              <Text style={styles.btnText}>Spela in</Text>
+              <Text style={styles.btnText}>Record</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -413,7 +409,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
               disabled={events.length === 0}
             >
               <Ionicons name="play" size={18} color="#FFF" />
-              <Text style={styles.btnText}>Spela upp</Text>
+              <Text style={styles.btnText}>Play</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -421,7 +417,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
               onPress={vm.stopPlayback}
             >
               <Ionicons name="pause" size={18} color="#FFF" />
-              <Text style={styles.btnText}>Pausa</Text>
+              <Text style={styles.btnText}>Pause</Text>
             </TouchableOpacity>
           )}
 
@@ -434,13 +430,13 @@ const CaptureScreen = ({ navigation, route, vm }) => {
               size={18}
               color="#FFF"
             />
-            <Text style={styles.btnText}>Spara rapport</Text>
+            <Text style={styles.btnText}>Save Report</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.btnGray} onPress={vm.handleClear}>
             <Ionicons name="trash" size={18} color="#1A1A1A" />
             <Text style={[styles.btnText, { color: "#1A1A1A" }]}>
-              Rensa
+              Clear
             </Text>
           </TouchableOpacity>
 
@@ -451,15 +447,14 @@ const CaptureScreen = ({ navigation, route, vm }) => {
             >
               <Ionicons name="cloud-upload" size={18} color="#FFF" />
               <Text style={styles.btnText}>
-                Spara på {returnProfile?.name.split(" ")[0]}
+                Save to {returnProfile?.name.split(" ")[0]}
               </Text>
             </TouchableOpacity>
           )}
         </View>
 
         <Text style={styles.helper}>
-          MVP: “inspelning” sparar ritningen med timestamps och kan spela
-          upp den igen.
+          MVP: "Recording" saves the drawing with timestamps and can play it back.
         </Text>
       </View>
     </View>

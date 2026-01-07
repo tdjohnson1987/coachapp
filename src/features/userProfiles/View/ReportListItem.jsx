@@ -3,8 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const ReportListItem = ({ report, onPress, onLongPress }) => {
-    const reportType = report?.type || "Okänd analys";
-    const isDrawing = reportType.toLowerCase().includes("drawing");
+    // Priority: 1. Custom Title, 2. Type, 3. Fallback string
+    const displayTitle = report?.title || report?.type || "Untitled Analysis";
+    
+    const isDrawing = report?.type?.toLowerCase().includes("drawing");
+
     return (
         <TouchableOpacity 
             style={styles.reportCard} 
@@ -21,9 +24,12 @@ const ReportListItem = ({ report, onPress, onLongPress }) => {
             </View>
             
             <View style={styles.reportInfo}>
-                <Text style={styles.reportTitle}>{reportType}</Text>
+                {/* Now displaying the custom name saved during capture */}
+                <Text style={styles.reportTitle} numberOfLines={1}>
+                    {displayTitle}
+                </Text>
                 <Text style={styles.reportDate}>
-                    {report?.date || "Inget datum"} • {report?.time || ""}
+                    {report?.date || "No date"} • {report?.time || ""}
                 </Text>
             </View>
 

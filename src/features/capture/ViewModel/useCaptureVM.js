@@ -489,24 +489,23 @@ export default function useCaptureVM() {
     ).current;
     
     //========== Saving - lager =========
-    const saveAnalysis = (profileId, onSaveCallback) => {
+    const saveAnalysis = (profileId, onSaveCallback, title) => {
+        // Check if there is anything to save
         if (recordedEvents.length === 0 && !audioUri) return false;
 
         const analysisSnapshot = {
             id: Date.now().toString(),
+            title: title || "Untitled Analysis", // Store the name here
             type: "Drawing Analysis", 
             date: new Date().toLocaleDateString(),
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             
-            // Data för uppspelning
             recordedEvents: [...recordedEvents],
-            activeImageSource: activeImageSource, // Innehåller antingen {uri} eller require()
+            activeImageSource: activeImageSource,
             canvasSize: { ...canvasSize },
             baseStrokes: [...recordingBaseStrokes],
-            audioUri: audioUri, // Säkerställ att denna sträng skickas med!
-            
-            // Metadata för listan
-            description: `Analysis with ${recordedEvents.length} actions`,
+            audioUri: audioUri,
+            description: `Analysis: ${title}`,
         };
 
         onSaveCallback(profileId, analysisSnapshot);
