@@ -290,7 +290,6 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               const { width, height } = e.nativeEvent.layout;
               setCanvasSize({ w: width || 1, h: height || 1 });
             }}
-            ref={captureRef}
           >
             {videoFile ? (
               <>
