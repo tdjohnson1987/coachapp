@@ -42,7 +42,7 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
         <TouchableOpacity onPress={() => navigation.navigate('Home')}>
           <Text style={{ color: '#007AFF', fontWeight: '700', fontSize: 16 }}>Hem</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Mina Profiler</Text>
+        <Text style={styles.header}>My Profiles</Text>
         <TouchableOpacity style={styles.iconAdd} onPress={() => setIsCreating(true)}>
           <Ionicons name="add-circle" color="#007AFF" size={28} />
         </TouchableOpacity>
@@ -95,23 +95,23 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
             ) : (
               <>
                 <Ionicons name="camera" size={32} color="#007AFF" />
-                <Text style={styles.imageText}>Lägg till bild</Text>
+                <Text style={styles.imageText}>Add picture</Text>
               </>
             )}
           </TouchableOpacity>
 
-          <Text style={styles.label}>Namn</Text>
+          <Text style={styles.label}>Name</Text>
           <TextInput
             style={styles.input}
-            placeholder="Ange namn"
+            placeholder="Insert name"
             value={formData.name}
             onChangeText={(t) => setFormData({ ...formData, name: t })}
           />
 
-          <Text style={styles.label}>Ålder</Text>
+          <Text style={styles.label}>Age</Text>
           <TextInput
             style={styles.input}
-            placeholder="Ex: 24"
+            placeholder="Eg: 24"
             keyboardType="numeric"
             value={formData.age}
             onChangeText={(t) => setFormData({ ...formData, age: t })}
