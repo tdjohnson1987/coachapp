@@ -2,68 +2,117 @@ import { useMemo, useRef, useState } from "react";
 import { Audio } from "expo-av";
 import useDrawingVM from "../../../components/drawing/useDrawingVM";
 
-// recordedEvents: { type:"add"|"undo"|"clear", t:number(ms, RELATIVT TAGNINGEN), stroke? }
 export default function useVideoDrawingVM() {
-    // --- Video time (ABSOLUT i videon)
+    // ----- video time (ABS, ms) -----
+    const [videoTimeAbsMs, setVideoTimeAbsMs] = useState(0);
     const videoTimeAbsRef = useRef(0);
 
-    // --- “Tagning” (clip range i ABSOLUT video-ms)
+    const setVideoTimeMs = (absMs) => {
+        const v = absMs ?? 0;
+        videoTimeAbsRef.current = v;
+        setVideoTimeAbsMs(v);
+    };
+
+    // ----- clip range in video time -----
     const clipStartMsRef = useRef(null);
     const clipEndMsRef = useRef(null);
-
-    // --- Recording/playback flags
-    const [isRecording, setIsRecording] = useState(false);
-    const [isPlayback, setIsPlayback] = useState(false);
-
-    const [recordedEvents, setRecordedEvents] = useState([]);
-    const [audioUri, setAudioUri] = useState(null);
-
-    // --- Audio (mic record + playback sound)
-    const audioRecRef = useRef(null);
-    const audioSoundRef = useRef(null);
-
-    const setVideoTimeMs = (absMs) => {
-        videoTimeAbsRef.current = absMs ?? 0;
-    };
 
     const getClipRange = () => ({
         startMs: clipStartMsRef.current,
         endMs: clipEndMsRef.current,
     });
 
-    // ABS -> REL (relativt clipStart)
-    const getRelMs = () => {
-        const s = clipStartMsRef.current ?? 0;
-        return Math.max(0, (videoTimeAbsRef.current ?? 0) - s);
+    // ----- recording / playback flags -----
+    const [isRecording, setIsRecording] = useState(false);
+    const [isPlayback, setIsPlayback] = useState(false);
+    const [isPlaybackArmed, setIsPlaybackArmed] = useState(false);
+
+    const isRecordingRef = useRef(false);
+
+    // ----- events + audio -----
+    const [recordedEvents, setRecordedEvents] = useState([]);
+    const [audioUri, setAudioUri] = useState(null);
+
+    const audioRecRef = useRef(null);
+    const audioSoundRef = useRef(null);
+
+    // ----- recording time base (wall clock) -----
+    const recWallStartRef = useRef(null);
+
+    const getRelMsRecording = () => {
+        const s = recWallStartRef.current ?? Date.now();
+        return Math.max(0, Date.now() - s);
     };
 
-    const pushEvent = (evt) => setRecordedEvents((prev) => [...prev, evt]);
+    // playback time base uses video position - clipStart
+    const getRelMsPlayback = () => {
+        const s = clipStartMsRef.current ?? 0;
+        return Math.max(0, (videoTimeAbsMs ?? 0) - s);
+    };
 
-    // --- Drawing VM (tar callbacks som i Capture)
+    const pushEvent = (evt) => {
+        setRecordedEvents((prev) => [...prev, evt]);
+    };
+
+    // Sort events for stable replay
+    const eventsSorted = useMemo(() => {
+        return [...recordedEvents].sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
+    }, [recordedEvents]);
+
+    // ----- Drawing VM (records detailed stroke build) -----
     const drawing = useDrawingVM({
         enabled: true,
-        onAddStroke: (stroke) => {
-            if (!isRecording) return;
-            pushEvent({ type: "add", t: getRelMs(), stroke });
+
+        // EXPECTED payload: { id, stroke }
+        onStrokeStart: ({ id, stroke }) => {
+            if (!isRecordingRef.current) return;
+            if (!id || !stroke) return;
+            pushEvent({ type: "stroke-start", t: getRelMsRecording(), id, stroke });
         },
+
+        // EXPECTED payload: { id, stroke } (updated stroke)
+        onStrokePoint: ({ id, stroke }) => {
+            if (!isRecordingRef.current) return;
+            if (!id || !stroke) return;
+            pushEvent({ type: "stroke-point", t: getRelMsRecording(), id, stroke });
+        },
+
+        onStrokeEnd: ({ id }) => {
+            if (!isRecordingRef.current) return;
+            if (!id) return;
+            pushEvent({ type: "stroke-end", t: getRelMsRecording(), id });
+        },
+
         onUndo: () => {
-            if (!isRecording) return;
-            pushEvent({ type: "undo", t: getRelMs() });
+            if (!isRecordingRef.current) return;
+            pushEvent({ type: "undo", t: getRelMsRecording() });
         },
+
         onClear: () => {
-            if (!isRecording) return;
-            pushEvent({ type: "clear", t: getRelMs() });
+            if (!isRecordingRef.current) return;
+            pushEvent({ type: "clear", t: getRelMsRecording() });
         },
     });
 
+    // ----- clear/reset -----
     const clearAll = async () => {
         drawing?.clear?.();
+
         setRecordedEvents([]);
         setAudioUri(null);
+
         clipStartMsRef.current = null;
         clipEndMsRef.current = null;
+
+        videoTimeAbsRef.current = 0;
+        setVideoTimeAbsMs(0);
+
         setIsRecording(false);
         setIsPlayback(false);
+        setIsPlaybackArmed(false);
+
+        isRecordingRef.current = false;
+        recWallStartRef.current = null;
 
         try {
             await audioSoundRef.current?.stopAsync?.();
@@ -79,18 +128,25 @@ export default function useVideoDrawingVM() {
         audioRecRef.current = null;
     };
 
-    // ✅ Start REC: klippet startar vid NUvarande videotid
+    // ----- recording -----
     const startRecording = async ({ startVideoMs } = {}) => {
-        // ny tagning
-        const startAbs = typeof startVideoMs === "number" ? startVideoMs : videoTimeAbsRef.current ?? 0;
+        recWallStartRef.current = Date.now();
+
+        const startAbs =
+            typeof startVideoMs === "number" ? startVideoMs : videoTimeAbsRef.current ?? 0;
+
         clipStartMsRef.current = startAbs;
         clipEndMsRef.current = null;
 
         setRecordedEvents([]);
         setAudioUri(null);
-        setIsPlayback(false);
 
-        // audio record (mic)
+        setIsPlayback(false);
+        setIsPlaybackArmed(false);
+
+        setIsRecording(true);
+        isRecordingRef.current = true;
+
         try {
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: true,
@@ -100,7 +156,6 @@ export default function useVideoDrawingVM() {
                 playThroughEarpieceAndroid: false,
             });
 
-
             const rec = new Audio.Recording();
             await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
             await rec.startAsync();
@@ -109,47 +164,56 @@ export default function useVideoDrawingVM() {
             console.warn("audio record start failed", e);
             audioRecRef.current = null;
         }
-
-        setIsRecording(true);
     };
 
-    // ✅ Stop REC: sätter clipEndMs vid NUvarande videotid och sparar mic-audio
     const stopRecording = async ({ endVideoMs } = {}) => {
-        const endAbs = typeof endVideoMs === "number" ? endVideoMs : videoTimeAbsRef.current ?? 0;
-        clipEndMsRef.current = endAbs;
+        const startAbs = clipStartMsRef.current ?? 0;
 
-        await Audio.setAudioModeAsync({ //HÄR?
-            allowsRecordingIOS: false,
-            playsInSilentModeIOS: true,
-        });
+        // hur länge ritningen spelades in (ms)
+        const dur = getRelMsRecording();
+        const computedEnd = startAbs + dur;
 
+        const endAbs =
+            typeof endVideoMs === "number" ? endVideoMs : videoTimeAbsRef.current ?? 0;
 
-        // stop mic record
+        // Om videon stod still (endAbs == startAbs) -> använd computedEnd
+        clipEndMsRef.current = endAbs > startAbs ? endAbs : computedEnd;
+
+        recWallStartRef.current = null;
+
+        setIsRecording(false);
+        isRecordingRef.current = false;
+
+        try {
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: true,
+            });
+        } catch { }
+
         try {
             const rec = audioRecRef.current;
             if (rec) {
                 await rec.stopAndUnloadAsync();
-                const uri = rec.getURI();
-                setAudioUri(uri ?? null);
+                setAudioUri(rec.getURI() ?? null);
             }
         } catch (e) {
             console.warn("audio record stop failed", e);
         } finally {
             audioRecRef.current = null;
         }
-
-        setIsRecording(false);
     };
 
-    // ✅ Playback: events bygger ritning utifrån REL playhead (video position - clipStart)
-    const startPlayback = async () => {
-        if (!recordedEvents.length) return;
-        setIsPlayback(true);
+    // ----- playback controls -----
+    const armPlayback = () => setIsPlaybackArmed(true);
+    const disarmPlayback = () => setIsPlaybackArmed(false);
 
-        // starta mic playback från början (synkas genom att vi startar samtidigt som video)
+    const startPlayback = async () => {
+        setIsPlayback(true);
+        setIsPlaybackArmed(true);
+
         if (audioUri) {
             try {
-                // städa gammal
                 try {
                     await audioSoundRef.current?.stopAsync?.();
                 } catch { }
@@ -158,7 +222,10 @@ export default function useVideoDrawingVM() {
                 } catch { }
                 audioSoundRef.current = null;
 
-                const { sound } = await Audio.Sound.createAsync({ uri: audioUri }, { shouldPlay: true });
+                const { sound } = await Audio.Sound.createAsync(
+                    { uri: audioUri },
+                    { shouldPlay: true }
+                );
                 audioSoundRef.current = sound;
             } catch (e) {
                 console.warn("audio playback failed", e);
@@ -168,50 +235,89 @@ export default function useVideoDrawingVM() {
 
     const stopPlayback = async () => {
         setIsPlayback(false);
+        setIsPlaybackArmed(false);
         try {
             await audioSoundRef.current?.stopAsync?.();
         } catch { }
     };
 
-    // Render strokes:
-    // - under REC / PLAYBACK: rel = (videoAbs - clipStart)
-    // - annars: visa allt (Infinity)
-    const strokesToRender = useMemo(() => {
-        const buildStrokesAtTime = (t) => {
-            let s = [];
-            for (const evt of recordedEvents) {
-                if (evt.t > t) break;
-                if (evt.type === "add" && evt.stroke) s = [...s, evt.stroke];
-                if (evt.type === "undo") s = s.slice(0, -1);
-                if (evt.type === "clear") s = [];
-            }
-            return s;
-        };
+    // ----- build strokes for time t (ms relative) -----
+    const buildStrokesAtTime = (t) => {
+        let done = [];
+        const building = new Map();
 
-        if (isRecording || isPlayback) return buildStrokesAtTime(getRelMs());
+        for (const evt of eventsSorted) {
+            const tt = evt.t ?? 0;
+            if (tt > t) break;
+
+            if (evt.type === "clear") {
+                done = [];
+                building.clear();
+                continue;
+            }
+
+            if (evt.type === "undo") {
+                done = done.slice(0, -1);
+                continue;
+            }
+
+            if (evt.type === "stroke-start") {
+                if (evt.id && evt.stroke) building.set(evt.id, evt.stroke);
+                continue;
+            }
+
+            if (evt.type === "stroke-point") {
+                if (evt.id && evt.stroke) building.set(evt.id, evt.stroke);
+                continue;
+            }
+
+            if (evt.type === "stroke-end") {
+                const s = evt.id ? building.get(evt.id) : null;
+                if (s) done.push(s);
+                if (evt.id) building.delete(evt.id);
+                continue;
+            }
+        }
+
+        // visa även strokes som fortfarande byggs (så man ser “pennan”)
+        for (const s of building.values()) done.push(s);
+
+        return done;
+    };
+
+    // ----- strokesToRender (the thing UI should use) -----
+    const strokesToRender = useMemo(() => {
+        if (isRecording) return buildStrokesAtTime(getRelMsRecording());
+        if (isPlayback) return buildStrokesAtTime(getRelMsPlayback());
+
+        // i idle-läge: visa allt (om du vill)
         return buildStrokesAtTime(Number.POSITIVE_INFINITY);
-    }, [recordedEvents, isRecording, isPlayback]);
+    }, [isRecording, isPlayback, videoTimeAbsMs, eventsSorted]);
 
     return {
         drawing,
 
-        // states
+        // state
         isRecording,
         isPlayback,
+        isPlaybackArmed,
+
         recordedEvents,
         audioUri,
 
-        // clip
+        // clip + time
         getClipRange,
-
-        // time
         setVideoTimeMs,
 
         // actions
         startRecording,
         stopRecording,
+
+        armPlayback,
+        disarmPlayback,
         startPlayback,
         stopPlayback,
+
         clearAll,
 
         // render

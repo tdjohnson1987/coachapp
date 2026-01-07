@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   Platform,
-  Pressable,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Video } from "expo-av";
@@ -39,21 +38,24 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
   } = vm;
 
   const videoRef = useRef(null);
+
+  // ✅ state (inte ref) för att undvika "flash" där alla strokes syns direkt
+  const [playbackArmed, setPlaybackArmed] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+
   const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
-  const [drawMode, setDrawMode] = useState(true);
+  const [videoKey, setVideoKey] = useState(0);
 
   const d = videoDrawing?.drawing;
 
+  // När REC/PLAYBACK/Armed => rendera strokes från events (tidsstyrt)
+  // annars => rendera "vanlig" ritning (om ni använder det läget)
   const strokesForCanvas =
-    videoDrawing?.isPlayback
-      ? (videoDrawing?.strokesToRender ?? [])
+    (videoDrawing.isRecording || videoDrawing.isPlayback || playbackArmed)
+      ? (videoDrawing.strokesToRender ?? [])
       : (d?.allToRender ?? d?.strokes ?? []);
 
-
-
-
-  // ✅ Robust adapter (panHandlers + toolbar props)
+  // Adapter för DrawingToolbar + touch-layer
   const drawApi = d
     ? {
       panHandlers: d.panHandlers ?? d.panResponder?.panHandlers ?? d._panResponder?.panHandlers,
@@ -68,8 +70,6 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     }
     : null;
 
-
-
   const handlePickVideo = async () => {
     const result = await DocumentPicker.getDocumentAsync({
       type: ["video/*"],
@@ -80,15 +80,16 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     const file = result.assets?.[0];
     if (!file?.uri) return;
 
-    try {
-      await videoRef.current?.stopAsync?.();
-    } catch { }
+    // stoppa video
+    try { await videoRef.current?.stopAsync?.(); } catch { }
 
-    // reset state
-    d?.clear?.();
-    videoDrawing.stopPlayback?.();
-    videoDrawing.stopRecording?.();
+    // nollställ UI + VM
+    setPlaybackArmed(false);
     setIsPlaying(false);
+    await videoDrawing.clearAll?.();
+
+    // tvinga nytt Video-instant
+    setVideoKey((k) => k + 1);
 
     await loadVideo({
       uri: file.uri,
@@ -96,6 +97,10 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
       size: file.size ?? 0,
       type: file.mimeType ?? "video/mp4",
     });
+
+    // starta från 0 visuellt/logiskt
+    videoDrawing.setVideoTimeMs?.(0);
+    try { await videoRef.current?.setPositionAsync?.(0); } catch { }
   };
 
   const togglePlay = async () => {
@@ -130,32 +135,29 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
   const toggleRecording = async () => {
     if (!videoFile) return;
 
-    // stoppa playback om den kör
-    if (videoDrawing.isPlayback) {
+    // om playback kör -> stoppa
+    if (videoDrawing.isPlayback || playbackArmed) {
+      setPlaybackArmed(false);
       await videoDrawing.stopPlayback?.();
       try { await videoRef.current?.pauseAsync?.(); } catch { }
       setIsPlaying(false);
     }
 
+    // STOP REC
     if (videoDrawing.isRecording) {
       const endMs = await getVideoPosMs();
       await videoDrawing.stopRecording?.({ endVideoMs: endMs });
 
-      // “Capture-känsla”: pausa när du stoppar REC
+      // pausa när man stoppar rec (som ni vill)
       try { await videoRef.current?.pauseAsync?.(); } catch { }
       setIsPlaying(false);
       return;
     }
 
+    // START REC (startar INTE videon — du vill kunna rita på stillbild)
     const startMs = await getVideoPosMs();
     await videoDrawing.startRecording?.({ startVideoMs: startMs });
-
-    // “Capture-känsla”: börja spela när du startar REC
-    try { await videoRef.current?.playAsync?.(); } catch { }
-    setIsPlaying(true);
   };
-
-
 
   const togglePlayback = async () => {
     if (!videoFile) return;
@@ -165,26 +167,46 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     const endMs = range?.endMs;
     if (typeof startMs !== "number" || typeof endMs !== "number") return;
 
-    if (videoDrawing.isPlayback) {
+    // STOP playback
+    if (playbackArmed || videoDrawing.isPlayback) {
+      setPlaybackArmed(false);
       await videoDrawing.stopPlayback?.();
       try { await videoRef.current?.pauseAsync?.(); } catch { }
       setIsPlaying(false);
       return;
     }
 
+    // ✅ ARM först så vi INTE flashar "alla strokes"
+    setPlaybackArmed(true);
+
     try {
+      // sätt video & playhead till clip-start
       await videoRef.current?.setPositionAsync?.(startMs);
+      videoDrawing.setVideoTimeMs?.(startMs);
+
+      // starta VM playback (ljud + flaggor)
+      await videoDrawing.startPlayback?.();
+
+      // spela video
       await videoRef.current?.playAsync?.();
       setIsPlaying(true);
-    } catch { }
-
-    d?.clear?.();
-
-    await videoDrawing.startPlayback?.();
+    } catch (e) {
+      console.warn("playback start failed", e);
+      setPlaybackArmed(false);
+    }
   };
 
+  const handleReset = async () => {
+    // stoppa allt
+    setPlaybackArmed(false);
+    setIsPlaying(false);
 
+    try { await videoRef.current?.pauseAsync?.(); } catch { }
+    try { await videoRef.current?.setPositionAsync?.(0); } catch { }
 
+    await videoDrawing.clearAll?.();
+    videoDrawing.setVideoTimeMs?.(0);
+  };
 
   const renderFrameItem = ({ item }) => {
     const isSelected = selectedFrames.includes(item.id);
@@ -200,7 +222,12 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     );
   };
 
-
+  const range = videoDrawing.getClipRange?.();
+  const clipReady =
+    !!videoFile &&
+    typeof range?.startMs === "number" &&
+    typeof range?.endMs === "number" &&
+    range.endMs > range.startMs;
 
   return (
     <View style={styles.container}>
@@ -224,7 +251,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
       <View style={styles.content}>
         {returnProfile && (
-          <Text style={{ marginBottom: 8, color: '#6C757D' }}>
+          <Text style={{ marginBottom: 8, color: "#6C757D" }}>
             Analyserar: {returnProfile.name}
           </Text>
         )}
@@ -266,6 +293,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                   </View>
                 ) : (
                   <Video
+                    key={`${videoKey}-${videoFile?.uri ?? ""}`}
                     ref={videoRef}
                     source={{ uri: videoFile.uri }}
                     style={styles.video}
@@ -276,18 +304,28 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                       if (!status?.isLoaded) return;
 
                       const pos = status.positionMillis ?? 0;
+
+                      // viktigt: uppdatera tiden för timed replay
                       videoDrawing.setVideoTimeMs?.(pos);
 
-                      const { endMs } = videoDrawing.getClipRange?.() ?? {};
-                      if (videoDrawing.isPlayback && typeof endMs === "number" && pos >= endMs) {
+                      // stoppa playback vid endMs
+                      const r = videoDrawing.getClipRange?.();
+                      const endMs = r?.endMs;
+
+                      if ((playbackArmed || videoDrawing.isPlayback) && typeof endMs === "number" && pos >= endMs) {
+                        setPlaybackArmed(false);
                         try { await videoRef.current?.pauseAsync?.(); } catch { }
+                        setIsPlaying(false);
+                        await videoDrawing.stopPlayback?.();
+                        return;
+                      }
+
+                      if (status.didJustFinish) {
+                        setPlaybackArmed(false);
                         setIsPlaying(false);
                         await videoDrawing.stopPlayback?.();
                       }
                     }}
-
-
-
                   />
                 )}
 
@@ -300,23 +338,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                   />
                 </View>
 
-                {/* Info */}
-                <View style={styles.overlayInfoBox} pointerEvents="none">
-                  <Text style={styles.overlayInfo}>
-                    Objekt: {videoDrawing.strokesToRender?.length ?? 0}
-                  </Text>
-                </View>
 
-                {/* Play/Pause overlay (tips: stäng Rita för att kunna trycka på play) */}
-                <View style={styles.playOverlay} pointerEvents="box-none">
-                  <Pressable onPress={togglePlay} style={styles.playButton}>
-                    <Ionicons
-                      name={isPlaying ? "pause-circle" : "play-circle"}
-                      size={72}
-                      color="#FFFFFF"
-                    />
-                  </Pressable>
-                </View>
               </>
             ) : (
               <View style={styles.videoPlaceholder}>
@@ -327,15 +349,14 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               </View>
             )}
 
-            {/* Touch-layer för ritning */}
-            {!!videoFile && !!drawApi?.panHandlers && drawMode && (
+            {/* Touch-layer för ritning (alltid på när video finns) */}
+            {!!videoFile && !!drawApi?.panHandlers && (
               <View
                 style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
                 pointerEvents="auto"
                 {...drawApi.panHandlers}
               />
             )}
-
           </View>
 
           {/* Meta + clear */}
@@ -345,13 +366,13 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             </Text>
 
             <TouchableOpacity onPress={drawApi?.clear} disabled={!videoFile || !drawApi}>
-              <Text style={[styles.clearText, (!videoFile || !d) && styles.clearTextDisabled]}>
+              <Text style={[styles.clearText, (!videoFile || !drawApi) && styles.clearTextDisabled]}>
                 Rensa ritning
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Controls: REC + PLAYBACK + Rita */}
+          {/* Controls: REC + PLAYBACK + PLAY + RESET */}
           <View style={styles.controlsRow}>
             <TouchableOpacity
               style={[
@@ -371,26 +392,38 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               style={[
                 styles.controlBtn,
                 { backgroundColor: "#6F42C1" },
-                (!videoFile || !videoDrawing.recordedEvents?.length) && styles.controlBtnDisabled,
+                !clipReady && styles.controlBtnDisabled,
               ]}
-              disabled={!videoFile || !videoDrawing.recordedEvents?.length}
+              disabled={!clipReady}
               onPress={togglePlayback}
             >
               <Text style={styles.controlBtnText}>
-                {videoDrawing.isPlayback ? "STOP" : "PLAYBACK"}
+                {(playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.controlBtn,
-                { backgroundColor: drawMode ? "#0D6EFD" : "#ADB5BD" },
+                { backgroundColor: "#343A40" },
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
-              onPress={() => setDrawMode((v) => !v)}
+              onPress={togglePlay}
             >
-              <Text style={styles.controlBtnText}>{drawMode ? "Rita: PÅ" : "Rita: AV"}</Text>
+              <Text style={styles.controlBtnText}>{isPlaying ? "PAUSE" : "PLAY"}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                { backgroundColor: "#0D6EFD" },
+                !videoFile && styles.controlBtnDisabled,
+              ]}
+              disabled={!videoFile}
+              onPress={handleReset}
+            >
+              <Text style={styles.controlBtnText}>RESET</Text>
             </TouchableOpacity>
           </View>
 
@@ -406,8 +439,6 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               onUndo={drawApi.undo}
             />
           )}
-
-
         </View>
 
         {/* Key frames + status */}
@@ -508,26 +539,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  playButton: {
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-
-  overlayInfoBox: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  overlayInfo: { color: "#fff", fontWeight: "600" },
 
   inlineRow: {
     flexDirection: "row",
