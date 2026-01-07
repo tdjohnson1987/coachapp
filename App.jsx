@@ -11,6 +11,7 @@ import ReportGeneratorView from './src/features/analysis/View/ReportGeneratorVie
 import { useAnalysisVM } from './src/features/analysis/ViewModel/useAnalysisVM';
 
 import CaptureScreen from './src/features/capture/View/CaptureScreen';
+import ReportDetailView from './src/features/userProfiles/View/ReportDetailView';
 
 
 export default function App() {
@@ -25,6 +26,26 @@ export default function App() {
     athleteId: 2,
     sport: 'football',
   });
+
+  // --- NY FUNKTION: Lägg till analys i en profils historik ---
+  const addAnalysisToProfile = (profileId, newAnalysis) => {
+    const analysisWithId = {
+      ...newAnalysis,
+      id: newAnalysis.id || Date.now().toString() 
+    };
+
+    setProfiles((prev) => prev.map((p) => {
+      if (p.id === profileId) {
+        const updatedReports = [analysisWithId, ...(p.reports || [])];
+        const updatedUser = { ...p, reports: updatedReports };
+        
+        // Synka vald profil direkt så listan uppdateras i vyn
+        setSelectedProfile(updatedUser);
+        return updatedUser;
+      }
+      return p;
+    }));
+  };
 
   // 1. Load profiles from storage on app start
   useEffect(() => {
@@ -60,10 +81,18 @@ export default function App() {
     };
     if (!loading) saveProfiles();
   }, [profiles, loading]);
+  
+  const [selectedReport, setSelectedReport] = useState(null);
 
   // Simple navigation helper
   const navigate = (screen, params) => {
-    if (params?.profile) setSelectedProfile(params.profile);
+    // Om vi får en profil i params, uppdatera den valda profilen
+    if (params?.profile) {
+      setSelectedProfile(params.profile);
+    }
+    if (params?.playbackReport) {
+      setSelectedReport(params.playbackReport);
+    }
     setCurrentScreen(screen);
   };
 
@@ -123,11 +152,24 @@ export default function App() {
         <ReportGeneratorView navigation={{ navigate }} vm={analysisVM} />
       )}
 
+      {currentScreen === 'ReportDetail' && selectedReport && (
+        <ReportDetailView 
+          route={{ params: { playbackReport: selectedReport } }} 
+          navigation={{ 
+            goBack: () => setCurrentScreen('Profile') 
+          }} 
+        />
+      )}
+    
       {currentScreen === 'Capture' && (
         <CaptureScreen 
           navigation={{ navigate }} 
-          // Skicka med den valda profilen som en parameter
-          route={{ params: { returnToProfile: selectedProfile } }} 
+          route={{ 
+            params: { 
+              returnToProfile: selectedProfile,
+              onSaveAnalysis: addAnalysisToProfile // LÄGG TILL DENNA RAD
+            } 
+          }} 
         />
       )}
 

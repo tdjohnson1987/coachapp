@@ -3,6 +3,7 @@ import { PanResponder } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
 import { builtInPlans, getArrowHead } from "../Model/CaptureService";
+import { AnalysisService } from "../../shared/AnalysisService"
 
 export default function useCaptureVM() {
     // Ritdata
@@ -20,7 +21,7 @@ export default function useCaptureVM() {
     const [playheadMs, setPlayheadMs] = useState(0);
     const playTimerRef = useRef(null);
 
-    const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
+    const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
 
     const currentStrokeRef = useRef(null);
     const [recordingBaseStrokes, setRecordingBaseStrokes] = useState([]);
@@ -472,6 +473,71 @@ export default function useCaptureVM() {
             },
         })
     ).current;
+    
+    //========== Saving - lager =========
+    const saveAnalysis = (profileId, onSaveCallback) => {
+        // Om du vill ha en säkerhetscheck
+        if (recordedEvents.length === 0 && !audioUri) return false;
+
+        const analysisSnapshot = {
+            id: Date.now().toString(), // Sträng är säkrare för list-keys
+            type: "Drawing Analysis", // För att ReportListItem ska fungera
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            
+            // KRITISKT: Lägg dessa på toppnivå så AnalysisCanvas hittar dem direkt
+            recordedEvents: [...recordedEvents],
+            activeImageSource: activeImageSource, // Denna variabel finns i din VM
+            canvasSize: { ...canvasSize },
+            baseStrokes: [...recordingBaseStrokes],
+            
+            // Behåll din gamla struktur om du vill, men ovanstående behövs för visningen
+            composition: {
+                background: customImageUri || selectedPlanId,
+                initialStrokes: recordingBaseStrokes,
+                events: recordedEvents,
+                canvasRatio: canvasSize.w / canvasSize.h
+            },
+            audioUri: audioUri,
+        };
+
+        onSaveCallback(profileId, analysisSnapshot);
+        return true;
+    };
+
+    const loadSavedReport = (report) => {
+        if (!report) return;
+
+        // 1. Sätt proportionerna direkt (Viktigt för zoomen!)
+        if (report.canvasSize) {
+            setCanvasSize(report.canvasSize);
+        }
+
+        // 2. Hämta data från din "composition" eller toppnivå
+        const events = report.recordedEvents || report.composition?.events || [];
+        const base = report.baseStrokes || report.composition?.initialStrokes || [];
+        const bg = report.activeImageSource || report.composition?.background;
+
+        // 3. Uppdatera statet manuellt istället för att lita på en extern service
+        setRecordedEvents(events);
+        setRecordingBaseStrokes(base);
+        setAudioUri(report.audioUri || null);
+
+        // 4. Skapa den statiska bilden (det man ser direkt)
+        const finalStrokes = buildStrokesAtTime(base, events, 9999999); 
+        setStrokes(finalStrokes);
+
+        // 5. Hantera bakgrunden (Fixar "ingen bild")
+        if (bg) {
+            if (typeof bg === 'string' && (bg.includes('/') || bg.includes('file:'))) {
+                setCustomImageUri(bg);
+                setSelectedPlanId(null);
+            } else {
+                setSelectedPlanId(bg);
+                setCustomImageUri(null);
+            }
+        }
+    };
 
     // ========= Playback-lagret =========
 
@@ -548,6 +614,11 @@ export default function useCaptureVM() {
         stopRecording,
         startPlayback,
         stopPlayback,
+
+        // Saving
+        saveAnalysis,
+        audioUri,
+        loadSavedReport,
 
         // Actions
         handleUndo,

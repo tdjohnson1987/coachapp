@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import ReportListItem from '../Model/ReportListItem';
 
 const ProfileView = ({ route, navigation }) => {
   const { profile, onUpdate } = route.params;
@@ -34,6 +35,31 @@ const ProfileView = ({ route, navigation }) => {
   const handleSave = () => {
     onUpdate(editData);
     setIsEditing(false);
+  };
+  useEffect(() => {
+    setEditData(profile);
+  }, [profile]);
+  
+  const handleDeleteReport = (reportId) => {
+    Alert.alert(
+      "Radera analys",
+      "Är du säker? Detta går inte att ångra.",
+      [
+        { text: "Avbryt", style: "cancel" },
+        { 
+          text: "Radera", 
+          style: "destructive",
+          onPress: () => {
+            // Filtrera bort rapporten från editData
+            const updatedReports = editData.reports.filter(r => r.id !== reportId);
+            const updatedProfile = { ...editData, reports: updatedReports };
+            
+            setEditData(updatedProfile); // Uppdatera lokalt state
+            onUpdate(updatedProfile);    // Skicka till App.js så det sparas globalt
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -147,9 +173,23 @@ const ProfileView = ({ route, navigation }) => {
             <Text style={styles.sectionHeader}>Previous Videos/Reports</Text>
             
             {/* Här kan du mappa din historik senare */}
-            <Text style={{ color: '#999', textAlign: 'center', marginTop: 10 }}>
-              Inga tidigare rapporter hittades.
-            </Text>
+            <View style={styles.reportsList}>
+              {editData.reports && editData.reports.length > 0 ? (
+                editData.reports.map((report) => (
+                  <ReportListItem 
+                      key={report.id}
+                      report={report}
+                      onPress={(r) => navigation.navigate('ReportDetail', { playbackReport: r })}
+                      onLongPress={handleDeleteReport} // Anropar din Alert-popup
+                  />
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="document-text-outline" size={40} color="#E9ECEF" />
+                  <Text style={styles.emptyStateText}>Inga sparade analyser ännu.</Text>
+                </View>
+              )}
+            </View>
           </View>
         )}
       </ScrollView>
@@ -261,6 +301,27 @@ const styles = StyleSheet.create({
   reportInfo: { flex: 1 },
   reportTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
   reportDate: { fontSize: 12, color: '#ADB5BD', marginTop: 2 },
+  reportsList: {
+    paddingBottom: 40, // Ger lite andrum längst ner i ScrollViewn
+  },
+  
+  // Styla Empty State (när inga rapporter finns)
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 20,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#ADB5BD',
+  },
+  emptyStateText: {
+    marginTop: 10,
+    color: '#ADB5BD',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 export default ProfileView;

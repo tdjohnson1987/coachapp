@@ -12,7 +12,7 @@ const HomeView = ({ navigate }) => {
 
       <View style={styles.buttonBlock}>
         <Button
-          title="Profiler"
+          title="Profiler och spelare"
           onPress={() => navigate('Selection')}
           color="#007AFF"
         />

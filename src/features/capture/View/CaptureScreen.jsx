@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert  } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
 import DrawingToolbar from "../../../components/drawing/DrawingToolbar";
@@ -11,6 +11,33 @@ const CaptureScreen = ({ navigation, route }) => {
     const vm = useCaptureVM();
 
     const returnProfile = route?.params?.returnToProfile;
+
+    const handleSaveAndExit = () => {
+        const onSave = route.params?.onSaveAnalysis;
+        if (!returnProfile || !onSave) return;
+        // Visa Pop-up
+        Alert.alert(
+            "Are you done?",
+            "Do you want to save this analysis to " + returnProfile.name + "'s profile?",
+            [
+                {
+                    text: "No",
+                    style: "cancel" // Gör ingenting, stänger bara rutan
+                },
+                {
+                    text: "Yes, save",
+                    onPress: () => {
+                        const success = vm.saveAnalysis(returnProfile.id, onSave);
+                        if (success) {
+                            navigation.navigate("Profile", { profile: returnProfile });
+                        } else {
+                            Alert.alert("Error", "Nothing to save. Please record something first.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
     const handleBack = () => {
         if (returnProfile) {
@@ -84,7 +111,7 @@ const CaptureScreen = ({ navigation, route }) => {
                     style={styles.pitchWrapper}
                     onLayout={(e) => {
                         const { width, height } = e.nativeEvent.layout;
-                        vm.setCanvasSize({ w: width || 1, h: height || 1 });
+                        vm.setCanvasSize({ w: width || 0, h: height || 0 });
                     }}
                     {...vm.panHandlers}
                 >
@@ -93,7 +120,7 @@ const CaptureScreen = ({ navigation, route }) => {
                         <Image
                             source={vm.activeImageSource}
                             style={styles.bgImage}
-                            resizeMode="contain"
+                            resizeMode="stretch"
                             pointerEvents="none"
                         />
                     ) : (
@@ -234,6 +261,15 @@ const CaptureScreen = ({ navigation, route }) => {
                         <Ionicons name="trash" size={18} color="#1A1A1A" />
                         <Text style={[styles.btnText, { color: "#1A1A1A" }]}>Rensa</Text>
                     </TouchableOpacity>
+                    {(vm.audioUri || vm.recordedEvents.length > 0) && !vm.isRecording && (
+                        <TouchableOpacity 
+                            style={[styles.btnBlue, { backgroundColor: '#5856D6' }]} 
+                            onPress={handleSaveAndExit}
+                        >
+                            <Ionicons name="cloud-upload" size={18} color="#FFF" />
+                            <Text style={styles.btnText}>Spara på {returnProfile?.name.split(' ')[0]}</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 <Text style={styles.helper}>

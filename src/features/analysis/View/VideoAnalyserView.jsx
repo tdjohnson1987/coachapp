@@ -223,16 +223,20 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
       </View>
 
       <View style={styles.content}>
+        {returnProfile && (
+          <Text style={{ marginBottom: 8, color: '#6C757D' }}>
+            Analyserar: {returnProfile.name}
+          </Text>
+        )}
+
         {/* Video card */}
         <View style={styles.card}>
           <Text style={styles.label}>Videokälla</Text>
-
           <TouchableOpacity style={styles.primaryButton} onPress={handlePickVideo}>
             <Text style={styles.primaryButtonText}>
               {videoMeta ? "Byt video" : "Välj video"}
             </Text>
           </TouchableOpacity>
-
           <Text style={styles.helperText}>
             {videoMeta ? videoMeta.name : "Ingen video vald ännu"}
           </Text>
@@ -428,7 +432,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           <Text style={styles.statusText}>Transkription: {transcription ? "Klar" : "Ej påbörjad"}</Text>
           <Text style={styles.statusText}>Rapport: {report ? "Skapad" : "Ej skapad"}</Text>
           {loading && <Text style={styles.statusText}>Bearbetar...</Text>}
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {error && <Text style={styles.errorText}>{String(error)}</Text>}
         </View>
       </View>
     </View>
