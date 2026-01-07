@@ -10,6 +10,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Polyline, Line, Circle, Polygon } from "react-native-svg";
 
+
+
 const CaptureScreen = ({ navigation, route, vm }) => {
   const returnProfile = route?.params?.returnToProfile;
   const profile = returnProfile || route?.params?.profile;
@@ -100,7 +102,8 @@ const CaptureScreen = ({ navigation, route, vm }) => {
         <View style={styles.row}>
           {(vm?.builtInPlans ?? []).map((plan) => {
             const active =
-              !vm?.selectedPlan || vm?.selectedPlan?.id === plan.id;
+              !vm?.selectedPlanId || vm?.selectedPlanId === plan.id;
+
             return (
               <TouchableOpacity
                 key={plan.id}
@@ -252,7 +255,7 @@ const CaptureScreen = ({ navigation, route, vm }) => {
           style={styles.pitchWrapper}
           onLayout={(e) => {
             const { width, height } = e.nativeEvent.layout;
-            setCanvasSize({ w: width || 0, h: height || 0 });
+            vm.setCanvasSize({ w: width || 0, h: height || 0 });
           }}
           {...vm.panHandlers}
         >

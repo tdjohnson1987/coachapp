@@ -11,6 +11,7 @@ import ReportGeneratorView from './src/features/analysis/View/ReportGeneratorVie
 import { useAnalysisVM } from './src/features/analysis/ViewModel/useAnalysisVM';
 
 import CaptureScreen from './src/features/capture/View/CaptureScreen';
+import useCaptureVM from './src/features/capture/ViewModel/useCaptureVM';
 import ReportDetailView from './src/features/userProfiles/View/ReportDetailView';
 
 
@@ -32,6 +33,9 @@ export default function App() {
     athleteId: 2,
     sport: 'football',
   });
+
+  const captureVM = useCaptureVM();   // create once
+
 
   // --- NY FUNKTION: Lägg till analys i en profils historik ---
   const addAnalysisToProfile = (profileId, newAnalysis) => {
@@ -176,7 +180,7 @@ export default function App() {
       {currentScreen === 'Capture' && (
         <CaptureScreen 
           navigation={{ navigate, goBack }} 
-          vm={analysisVM}
+          vm={captureVM}
           route={{ 
             params: { 
               returnToProfile: selectedProfile,
@@ -185,6 +189,7 @@ export default function App() {
           }} 
         />
       )}
+
 
     </View>
   );
