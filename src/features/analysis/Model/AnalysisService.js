@@ -1,28 +1,31 @@
+// src/features/analysis/Model/AnalysisService.js
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { transcribeAudio } from '../../../api/sttApi';
-import { saveReport } from '../../../api/filesApi';
+import { saveReport } from '../../../api/filesApi'; // can stay a no-op for now
+import createReport from './ReportModel'; // updated factory function
+
+const STORAGE_KEY = '@coachapp_reports';
 
 const AnalysisService = {
   async loadVideoMetadata(file) {
     return {
+      id: file.uri,        // simple id for now
       name: file.name,
       size: file.size,
       type: file.type,
-      // ev. duration läses i View via <video> och skickas in senare
     };
   },
 
   async extractPreviewFrames({ videoFile, frameCount = 6 }) {
-    // Här kan du senare implementera <video> + <canvas>
-    const videoDuration = 30; // Anta 30 sekunder för nu (ersätt med riktig duration)
+    const videoDuration = 30;
     const interval = videoDuration / frameCount;
 
-    // För nu: returnera mock-data
     const frames = [];
     for (let i = 0; i < frameCount; i++) {
       frames.push({
-        id: i,
-        time: i * 2,            // sekund
-        thumbnailUrl: null,     // fylls på när du har canvas
+        id: i.toString(),
+        time: Number((i * interval).toFixed(1)),
+        thumbnailUrl: null,
         notes: '',
       });
     }
@@ -30,28 +33,49 @@ const AnalysisService = {
   },
 
   async runSpeechToText(audioBlob) {
-    const result = await transcribeAudio(audioBlob); // STT‑API
+    const result = await transcribeAudio(audioBlob);
     return {
-      fullText: result.text,
-      segments: result.segments ?? [],
+      fullText: result?.text || '',
+      segments: result?.segments ?? [],
     };
   },
 
-  buildReport({ videoMeta, sttResult, selectedFrames, context }) {
-    return {
-      id: Date.now(),
-      createdAt: new Date().toISOString(),
-      coachId: context.coachId,
-      athleteId: context.athleteId,
-      sport: context.sport,
-      video: videoMeta,
-      transcription: sttResult,
-      frames: selectedFrames,
-    };
+  // Build a full report object from current VM state
+  buildReport({ coachId, athleteId, videoMeta, transcription, captureNotes, keyFrames }) {
+    return createReport({
+      coachId,
+      athleteId,
+      videoMeta,
+      transcription,
+      captureNotes,
+      keyFrames,
+    });
   },
 
+  // Save locally (per device) and optionally to backend
   async persistReport(report) {
-    return await saveReport(report);
+    // local storage with AsyncStorage
+    const existingRaw = await AsyncStorage.getItem(STORAGE_KEY);
+    const existing = existingRaw ? JSON.parse(existingRaw) : [];
+
+    const updated = [...existing, report];
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); // [web:197][web:198]
+
+    // optional backend call; safe even if saveReport is a stub
+    try {
+      await saveReport(report);
+    } catch (e) {
+      console.warn('saveReport (remote) failed, using local only', e);
+    }
+
+    return report;
+  },
+
+  // Helper to load all reports for one athlete/profile
+  async getReportsForAthlete(athleteId) {
+    const existingRaw = await AsyncStorage.getItem(STORAGE_KEY);
+    const existing = existingRaw ? JSON.parse(existingRaw) : [];
+    return existing.filter((r) => r.athleteId === athleteId);
   },
 };
 

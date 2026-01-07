@@ -1,70 +1,74 @@
 // src/features/analysis/View/ReportGeneratorView.jsx
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+} from 'react-native';
+// src/features/analysis/View/ReportGeneratorView.jsx
+import AnalysisService from '../Model/AnalysisService';
 
-const ReportGeneratorView = ({ navigation, vm }) => {
-  const {
-    videoMeta,
-    frames,
-    transcription,
-    report,
-    loading,
-    error,
-    runTranscription,
-    generateReport,
-  } = vm;
+const ReportGeneratorView = ({ navigation, route }) => {
+  const profile = route?.params?.profile;
+  const [reports, setReports] = useState([]);
 
-  const handleGenerate = async () => {
-    await generateReport();
+  useEffect(() => {
+    if (!profile) return;
+    AnalysisService.getReportsForAthlete(profile.id).then(setReports);
+  }, [profile]);
+
+  const openReport = (report) => {
+    navigation.navigate('ReportDetail', { report, profile });
   };
+
+  const renderItem = ({ item }) => (
+    <TouchableOpacity style={styles.card} onPress={() => openReport(item)}>
+      <Text style={styles.title}>
+        Rapport {new Date(item.createdAt).toLocaleString()}
+      </Text>
+      <Text style={styles.meta}>
+        Video: {item.videoMeta?.name || 'Okänd'} ·
+        Anteckningar: {item.captureNotes?.length || 0} ·
+        Frames: {item.keyFrames?.length || 0}
+      </Text>
+    </TouchableOpacity>
+  );
+
 
   return (
     <View style={styles.container}>
-      {/* Simple header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('Home')}>
-          <Text style={styles.link}>Hem</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Profile', { profile })}>
+          <Text style={styles.link}>Tillbaka</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Rapport</Text>
-        <View style={{ width: 40 }} />
+        <Text style={styles.headerTitle}>
+          Rapporter {profile ? `– ${profile.name}` : ''}
+        </Text>
+        <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.label}>Video</Text>
-        <Text style={styles.value}>
-          {videoMeta ? videoMeta.name : 'Ingen video vald'}
-        </Text>
-
-        <Text style={styles.label}>Transkription</Text>
-        <Text style={styles.value}>
-          {transcription ? transcription.fullText : 'Ingen transkription ännu'}
-        </Text>
-
-        <Text style={styles.label}>Antal markerade frames</Text>
-        <Text style={styles.value}>{frames.length}</Text>
-
-        {report && (
-          <>
-            <Text style={styles.label}>Rapport ID</Text>
-            <Text style={styles.value}>{report.id}</Text>
-          </>
-        )}
-
-        {error && <Text style={styles.error}>{error}</Text>}
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleGenerate}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? 'Skapar rapport...' : 'Skapa rapport'}
+      {reports.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>
+            Inga rapporter ännu för denna profil.
           </Text>
-        </TouchableOpacity>
-      </ScrollView>
+        </View>
+      ) : (
+        <FlatList
+          data={reports.sort(
+            (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+          )}
+          keyExtractor={(item) => item.reportId}
+          renderItem={renderItem}
+          contentContainerStyle={{ padding: 16 }}
+        />
+      )}
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
@@ -74,29 +78,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 60,
     paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
-  link: { color: '#007AFF', fontWeight: '700', fontSize: 16 },
-  title: { fontSize: 22, fontWeight: '800' },
-  content: { paddingHorizontal: 20, paddingBottom: 24 },
-  label: {
-    marginTop: 16,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6C757D',
-    textTransform: 'uppercase',
+  link: { color: '#007AFF', fontWeight: '700' },
+  headerTitle: { fontSize: 20, fontWeight: '800' },
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  value: { marginTop: 4, fontSize: 15, color: '#212529' },
-  error: { marginTop: 8, color: 'red' },
-  button: {
-    marginTop: 24,
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  title: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  meta: { fontSize: 13, color: '#6C757D' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { color: '#6C757D', fontSize: 14 },
 });
 
 export default ReportGeneratorView;

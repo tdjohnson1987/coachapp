@@ -1,21 +1,12 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Modal,
-  Image,
-  Dimensions,
-} from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Modal, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useProfileVM } from '../ViewModel/useProfileVM'; // Importera din VM
 
 const { width } = Dimensions.get('window');
 
 const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
+  const vm = useProfileVM(); // Skapa referens till VM
   const [isCreating, setIsCreating] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -25,47 +16,38 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
     image: null,
   });
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setFormData({ ...formData, image: result.assets[0].uri });
+  // LOGIK FLYTTAD: Använd VM för att välja bild
+  const handlePickImage = async () => {
+    const uri = await vm.pickImage();
+    if (uri) {
+      setFormData({ ...formData, image: uri });
     }
   };
 
-  const addProfile = () => {
+  // LOGIK FLYTTAD: Använd VM för att skapa profil-objektet
+  const handleAddProfile = () => {
     if (!formData.name) return;
-    setProfiles([...profiles, { ...formData, id: Date.now() }]);
+    
+    // Vi låter VM skapa det färdiga objektet (med ID etc)
+    const newProfile = vm.prepareNewProfile(formData);
+    
+    setProfiles([...profiles, newProfile]);
     setIsCreating(false);
     setFormData({ name: '', fitnessLevel: 'Beginner', age: '', image: null });
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Header row */}
       <View style={styles.headerRow}>
-        {/* Left: Home */}
         <TouchableOpacity onPress={() => navigation.navigate('Home')}>
-          <Text style={{ color: '#007AFF', fontWeight: '700', fontSize: 16 }}>
-            Hem
-          </Text>
+          <Text style={{ color: '#007AFF', fontWeight: '700', fontSize: 16 }}>Hem</Text>
         </TouchableOpacity>
-
-        {/* Center: title */}
         <Text style={styles.header}>Mina Profiler</Text>
-
-        {/* Right: add button */}
         <TouchableOpacity style={styles.iconAdd} onPress={() => setIsCreating(true)}>
           <Ionicons name="add-circle" color="#007AFF" size={28} />
         </TouchableOpacity>
       </View>
 
-      {/* Grid of profiles */}
       <View style={styles.grid}>
         {profiles.map((profile) => (
           <TouchableOpacity
@@ -97,7 +79,6 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
         ))}
       </View>
 
-      {/* Create-new modal */}
       <Modal visible={isCreating} animationType="slide">
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
@@ -107,7 +88,8 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.imagePickerCircle} onPress={pickImage}>
+          {/* Använd handlePickImage istället */}
+          <TouchableOpacity style={styles.imagePickerCircle} onPress={handlePickImage}>
             {formData.image ? (
               <Image source={{ uri: formData.image }} style={styles.fullImg} />
             ) : (
@@ -135,6 +117,7 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
             onChangeText={(t) => setFormData({ ...formData, age: t })}
           />
 
+          {/* ... Träningsnivå-väljaren ... */}
           <Text style={styles.label}>Träningsnivå</Text>
           <View style={styles.levelContainer}>
             {['Beginner', 'Intermediate', 'Pro', 'Elite'].map((level) => {
@@ -145,15 +128,13 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
                   style={[styles.levelBtn, active && styles.levelBtnActive]}
                   onPress={() => setFormData({ ...formData, fitnessLevel: level })}
                 >
-                  <Text style={[styles.levelText, active && styles.levelTextActive]}>
-                    {level}
-                  </Text>
+                  <Text style={[styles.levelText, active && styles.levelTextActive]}>{level}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          <TouchableOpacity style={styles.saveButton} onPress={addProfile}>
+          <TouchableOpacity style={styles.saveButton} onPress={handleAddProfile}>
             <Text style={styles.saveButtonText}>Spara profil</Text>
           </TouchableOpacity>
         </View>
@@ -161,7 +142,6 @@ const ProfileSelectionView = ({ navigation, profiles, setProfiles }) => {
     </ScrollView>
   );
 };
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   headerRow: {
@@ -204,14 +184,21 @@ const styles = StyleSheet.create({
   placeholderImg: { backgroundColor: '#E9ECEF', justifyContent: 'center', alignItems: 'center' },
   nameText: { fontSize: 16, fontWeight: '700', color: '#333', textAlign: 'center' },
   levelText: { fontSize: 13, color: '#6C757D', marginTop: 4 },
-
-  modalContent: { flex: 1, padding: 25, backgroundColor: '#FFF' },
+ 
+  modalContent: { 
+    flex: 1, 
+    padding: 25, 
+    paddingTop: 40, // Ändra från tidigare värde till t.ex. 60 för att sänka headern
+    backgroundColor: '#FFF' 
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 30, // Öka marginalen ner till bildcirkeln
+    marginTop: 10,    // Ger lite extra luft specifikt ovanför titeln
   },
+
   modalTitle: { fontSize: 24, fontWeight: '800' },
 
   imagePickerCircle: {

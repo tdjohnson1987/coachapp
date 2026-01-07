@@ -7,56 +7,70 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert, // FIX 1: Lagt till Alert här
+  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import ReportListItem from '../Model/ReportListItem';
+import { useProfileVM } from '../ViewModel/useProfileVM';
 
-const ProfileView = ({ route, navigation }) => {
+const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
   const { profile, onUpdate } = route.params;
-  
+  const vm = useProfileVM();
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState(profile);
+  const [editData, setEditData] = useState(profile || {});
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Uppdaterat för nyare Expo
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
+  useEffect(() => {
+    setEditData(profile || {});
+  }, [profile]);
 
-    if (!result.canceled) {
-      setEditData({ ...editData, image: result.assets[0].uri });
-    }
+  const handleOpenReports = () => {
+    navigation.navigate('ReportGenerator', { profile: editData });
   };
 
+  const handlePickImage = async () => {
+    const uri = await vm.pickImage();
+    if (uri) {
+      setEditData({ ...editData, image: uri }); // Ändrat från setFormData/formData
+    }
+  };
   const handleSave = () => {
     onUpdate(editData);
     setIsEditing(false);
   };
-  useEffect(() => {
-    setEditData(profile);
-  }, [profile]);
-  
+
   const handleDeleteReport = (reportId) => {
+      Alert.alert("Delete", "Are you sure?", [
+          { text: "No" },
+          { text: "Yes", onPress: () => {
+              const updated = vm.deleteReport(editData, reportId);
+              setEditData(updated);
+              onUpdate(updated);
+          }}
+      ]);
+  };
+  const handleDeleteProfile = () => {
     Alert.alert(
-      "Radera analys",
-      "Är du säker? Detta går inte att ångra.",
+      "Delete Profile",
+      "Are you sure you want to delete this profile?",
       [
-        { text: "Avbryt", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         { 
-          text: "Radera", 
-          style: "destructive",
-          onPress: () => {
-            // Filtrera bort rapporten från editData
-            const updatedReports = editData.reports.filter(r => r.id !== reportId);
-            const updatedProfile = { ...editData, reports: updatedReports };
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            // 1. Ask VM to calculate the new list
+            // We pass the 'profiles' prop here
+            const updatedList = await vm.deleteProfile(editData.id, profiles);
             
-            setEditData(updatedProfile); // Uppdatera lokalt state
-            onUpdate(updatedProfile);    // Skicka till App.js så det sparas globalt
-          }
+            if (updatedList) {
+              // 2. Update the state in App.js so the list screen refreshes
+              setProfiles(updatedList);
+              
+              // 3. Go back to the list
+              navigation.goBack();
+            }
+          } 
         }
       ]
     );
@@ -66,7 +80,10 @@ const ProfileView = ({ route, navigation }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profil</Text>
@@ -74,18 +91,25 @@ const ProfileView = ({ route, navigation }) => {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* --- PROFILSEKTION --- */}
+        {/* Profilsektion */}
         <View style={styles.profileSection}>
-          <TouchableOpacity 
-            onPress={isEditing ? pickImage : null} 
+          <TouchableOpacity
+            onPress={isEditing ? handlePickImage: null}
             activeOpacity={isEditing ? 0.7 : 1}
             style={styles.imageWrapper}
           >
-            {editData.image ? (
-              <Image source={{ uri: editData.image }} style={styles.avatar} />
+            {editData?.image ? (
+              <Image
+                source={{ uri: editData.image }}
+                style={styles.avatar}
+              />
             ) : (
               <View style={styles.placeholderAvatar}>
-                <Ionicons name="person-circle" size={100} color="#ADB5BD" />
+                <Ionicons
+                  name="person-circle"
+                  size={100}
+                  color="#ADB5BD"
+                />
               </View>
             )}
             {isEditing && (
@@ -97,70 +121,89 @@ const ProfileView = ({ route, navigation }) => {
 
           {!isEditing ? (
             <View style={styles.staticInfoWrapper}>
-              <Text style={styles.mainName}>{editData.name || 'Namn saknas'}</Text>
-              {/* FIX 2: Textsträngar måste vara rena. Undvik lösa pipes | utanför Text om möjligt */}
-              <Text style={styles.staticSubInfo}>
-                Ålder: {editData.age || '--'}  •  Nivå: {editData.fitnessLevel}
+              <Text style={styles.mainName}>
+                {editData?.name || 'Namn saknas'}
               </Text>
-              
-              <TouchableOpacity 
-                style={styles.editToggleBtn} 
+              <Text style={styles.staticSubInfo}>
+                Age: {editData?.age || '--'}  •  Level:{' '}
+                {editData?.fitnessLevel || '--'}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.editToggleBtn}
                 onPress={() => setIsEditing(true)}
               >
-                <Text style={styles.editToggleBtnText}>Ändra information</Text>
+                <Text style={styles.editToggleBtnText}>
+                  Change information
+                </Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <Text style={styles.mainName}>Redigera profil</Text>
+            <Text style={styles.mainName}>Edit profile</Text>
           )}
         </View>
 
-        {/* --- REDIGERINGSLÄGE --- */}
+        {/* Redigeringsläge */}
         {isEditing && (
           <View style={styles.form}>
-            <Text style={styles.label}>Namn</Text>
+            <Text style={styles.label}>Name</Text>
             <TextInput
               style={styles.input}
-              value={editData.name}
-              onChangeText={(t) => setEditData({ ...editData, name: t })}
+              value={editData?.name || ''}
+              onChangeText={(t) =>
+                setEditData({ ...editData, name: t })
+              }
             />
-            <Text style={styles.label}>Ålder</Text>
+
+            <Text style={styles.label}>Age</Text>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
-              value={editData.age}
-              onChangeText={(t) => setEditData({ ...editData, age: t })}
+              value={editData?.age || ''}
+              onChangeText={(t) =>
+                setEditData({ ...editData, age: t })
+              }
             />
-            
-            <TouchableOpacity style={styles.fullSaveBtn} onPress={handleSave}>
-              <Text style={styles.fullSaveBtnText}>Spara ändringar</Text>
+            <TouchableOpacity
+              style={styles.fullSaveBtn}
+              onPress={handleSave}
+            >
+              <Text style={styles.fullSaveBtnText}>
+                Save changes
+              </Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* --- NYA SEKTIONER --- */}
+        {/* Åtgärdssektion */}
         {!isEditing && (
           <View style={styles.actionSection}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.createBtn}
               onPress={() => {
                 Alert.alert(
-                  "New Analysis",
-                  "Would you like to use a picture or a video?",
+                  'New Analysis',
+                  'Would you like to use a picture or a video?',
                   [
                     {
-                      text: "Picture",
-                      onPress: () => navigation.navigate('Capture', { returnToProfile: editData }),
+                      text: 'Picture',
+                      onPress: () =>
+                        navigation.navigate('Capture', {
+                          returnToProfile: editData,
+                        }),
                     },
                     {
-                      text: "Video",
-                      onPress: () => navigation.navigate('VideoAnalysis', { returnToProfile: editData }),
+                      text: 'Video',
+                      onPress: () =>
+                        navigation.navigate('VideoAnalysis', {
+                          returnToProfile: editData,
+                        }),
                     },
                     {
-                      text: "Cancel",
-                      style: "cancel",
+                      text: 'Cancel',
+                      style: 'cancel',
                     },
-                  ]
+                  ],
                 );
               }}
             >
@@ -171,27 +214,42 @@ const ProfileView = ({ route, navigation }) => {
             <View style={styles.divider} />
 
             <Text style={styles.sectionHeader}>Previous Videos/Reports</Text>
-            
-            {/* Här kan du mappa din historik senare */}
+
             <View style={styles.reportsList}>
-              {editData.reports && editData.reports.length > 0 ? (
+              {editData?.reports && editData.reports.length > 0 ? (
                 editData.reports.map((report) => (
-                  <ReportListItem 
-                      key={report.id}
-                      report={report}
-                      onPress={(r) => navigation.navigate('ReportDetail', { playbackReport: r })}
-                      onLongPress={handleDeleteReport} // Anropar din Alert-popup
+                  <ReportListItem
+                    key={report.id}
+                    report={report}
+                    onPress={(r) =>
+                      navigation.navigate('ReportDetail', {
+                        playbackReport: r,
+                      })
+                    }
+                    onLongPress={handleDeleteReport}
                   />
                 ))
               ) : (
                 <View style={styles.emptyState}>
-                  <Ionicons name="document-text-outline" size={40} color="#E9ECEF" />
-                  <Text style={styles.emptyStateText}>Inga sparade analyser ännu.</Text>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={40}
+                    color="#E9ECEF"
+                  />
+                  <Text style={styles.emptyStateText}>
+                    Inga sparade analyser ännu.
+                  </Text>
                 </View>
               )}
             </View>
           </View>
         )}
+        <TouchableOpacity 
+          style={{ marginTop: 40, marginBottom: 20, alignItems: 'center' }}
+          onPress={handleDeleteProfile}
+        >
+          <Text style={{ color: '#FF3B30', fontWeight: '600' }}>Delete Profile</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -211,7 +269,12 @@ const styles = StyleSheet.create({
   backBtn: { padding: 5 },
 
   profileSection: { alignItems: 'center', marginVertical: 20 },
-  imageWrapper: { width: 120, height: 120, borderRadius: 60, marginBottom: 10 },
+  imageWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 10,
+  },
   avatar: { width: 120, height: 120, borderRadius: 60 },
   placeholderAvatar: {
     width: 120,
@@ -231,10 +294,14 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#FFF',
   },
-  
+
   staticInfoWrapper: { alignItems: 'center' },
   mainName: { fontSize: 24, fontWeight: '800', color: '#1A1A1A' },
-  staticSubInfo: { fontSize: 14, color: '#6C757D', marginTop: 4 },
+  staticSubInfo: {
+    fontSize: 14,
+    color: '#6C757D',
+    marginTop: 4,
+  },
   editToggleBtn: {
     marginTop: 15,
     paddingVertical: 8,
@@ -242,10 +309,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#F1F3F5',
   },
-  editToggleBtnText: { fontSize: 13, fontWeight: '700', color: '#007AFF' },
+  editToggleBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
 
-  form: { padding: 25, backgroundColor: '#F8F9FA', marginHorizontal: 20, borderRadius: 20 },
-  label: { fontSize: 12, fontWeight: '700', color: '#ADB5BD', marginBottom: 5, textTransform: 'uppercase' },
+  form: {
+    padding: 25,
+    backgroundColor: '#F8F9FA',
+    marginHorizontal: 20,
+    borderRadius: 20,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ADB5BD',
+    marginBottom: 5,
+    textTransform: 'uppercase',
+  },
   input: {
     backgroundColor: '#FFF',
     padding: 12,
@@ -274,38 +356,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  createBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
-  
+  createBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
   divider: { height: 1, backgroundColor: '#F1F3F5', marginVertical: 30 },
-  
-  sectionHeader: { fontSize: 18, fontWeight: '800', color: '#1A1A1A', marginBottom: 15 },
-  reportCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    padding: 15,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#F1F3F5',
-    marginBottom: 12,
+
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    marginBottom: 15,
   },
-  reportIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#F1F3F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  reportInfo: { flex: 1 },
-  reportTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  reportDate: { fontSize: 12, color: '#ADB5BD', marginTop: 2 },
-  reportsList: {
-    paddingBottom: 40, // Ger lite andrum längst ner i ScrollViewn
-  },
-  
-  // Styla Empty State (när inga rapporter finns)
+  reportsList: { paddingBottom: 40 },
+
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',

@@ -9,9 +9,7 @@ const UserService = {
   // Uppdatering i UserService.js
   getMockProfiles: () => {
     return [
-      { id: 1, name: "Anna Jönsson", age: 24, fitnessLevel: "Advanced", role: "athlete", bio: "Siktar på SM-guld." },
-      { id: 2, name: "Erik Kraft", age: 30, fitnessLevel: "Beginner", role: "athlete", bio: "Vill komma igång efter skada." },
-      { id: 3, name: "Coach Thomas", age: 45, fitnessLevel: "Elite", role: "coach", bio: "30 års erfarenhet." }
+      { id: 1, name: "Anna Jönsson", age: 24, fitnessLevel: "Advanced", role: "athlete", bio: "Siktar på SM-guld." }
     ];
   },
 
@@ -68,6 +66,17 @@ const UserService = {
       return response.data;
     } catch (error) {
       console.error("Could not retrieve feedback:", error);
+    }
+  },
+
+  async deleteProfile(profileId) {
+    try {
+      console.log(`Model: Raderar profil med ID ${profileId}`);
+      // I framtiden: await axios.delete(`${API_URL}/profiles/${profileId}`);
+      return true; 
+    } catch (error) {
+      console.error("Kunde inte radera profil i Model:", error);
+      throw error;
     }
   }
 };

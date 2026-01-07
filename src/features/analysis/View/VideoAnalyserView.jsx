@@ -19,6 +19,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
   const videoDrawing = useVideoDrawingVM();
 
   const returnProfile = route?.params?.returnToProfile;
+  const profile = returnProfile || route?.params?.profile;
+
   const handleBack = () => {
     if (returnProfile) navigation.navigate("Profile", { profile: returnProfile });
     else navigation.navigate("Home");
@@ -35,6 +37,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     error,
     loadVideo,
     toggleFrameSelection,
+    addKeyFrame,
   } = vm;
 
   const videoRef = useRef(null);
@@ -58,7 +61,10 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
   // Adapter för DrawingToolbar + touch-layer
   const drawApi = d
     ? {
-      panHandlers: d.panHandlers ?? d.panResponder?.panHandlers ?? d._panResponder?.panHandlers,
+      panHandlers:
+        d.panHandlers ??
+        d.panResponder?.panHandlers ??
+        d._panResponder?.panHandlers,
       tool: d.activeTool ?? d.tool,
       setTool: d.setActiveTool ?? d.setTool,
       color: d.activeColor ?? d.color,
@@ -139,7 +145,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     if (videoDrawing.isPlayback || playbackArmed) {
       setPlaybackArmed(false);
       await videoDrawing.stopPlayback?.();
-      try { await videoRef.current?.pauseAsync?.(); } catch { }
+      try {
+        await videoRef.current?.pauseAsync?.();
+      } catch { }
       setIsPlaying(false);
     }
 
@@ -171,7 +179,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     if (playbackArmed || videoDrawing.isPlayback) {
       setPlaybackArmed(false);
       await videoDrawing.stopPlayback?.();
-      try { await videoRef.current?.pauseAsync?.(); } catch { }
+      try {
+        await videoRef.current?.pauseAsync?.();
+      } catch { }
       setIsPlaying(false);
       return;
     }
@@ -239,9 +249,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
         <View style={{ alignItems: "center" }}>
           <Text style={styles.headerTitle}>Video Analysis</Text>
-          {returnProfile && (
-            <Text style={{ fontSize: 12, color: "#666", fontWeight: "600" }}>
-              Analyzing: {returnProfile.name}
+          {profile && (
+            <Text
+              style={{ fontSize: 12, color: "#666", fontWeight: "600" }}
+            >
+              Analyserar: {profile.name}
             </Text>
           )}
         </View>
@@ -249,6 +261,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         <View style={{ width: 32 }} />
       </View>
 
+      {/* Content */}
       <View style={styles.content}>
         {returnProfile && (
           <Text style={{ marginBottom: 8, color: "#6C757D" }}>
@@ -259,7 +272,10 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         {/* Video card */}
         <View style={styles.card}>
           <Text style={styles.label}>Videokälla</Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={handlePickVideo}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handlePickVideo}
+          >
             <Text style={styles.primaryButtonText}>
               {videoMeta ? "Byt video" : "Välj video"}
             </Text>
@@ -274,6 +290,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               const { width, height } = e.nativeEvent.layout;
               setCanvasSize({ w: width || 1, h: height || 1 });
             }}
+            ref={captureRef}
           >
             {videoFile ? (
               <>
@@ -329,8 +346,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                   />
                 )}
 
-                {/* Drawing overlay (render-only) */}
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                {/* Drawing overlay */}
+                <View
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                >
                   <DrawingCanvas
                     strokes={strokesForCanvas}
                     width={canvasSize.w}
@@ -342,7 +362,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               </>
             ) : (
               <View style={styles.videoPlaceholder}>
-                <Ionicons name="videocam-outline" size={40} color="#ADB5BD" />
+                <Ionicons
+                  name="videocam-outline"
+                  size={40}
+                  color="#ADB5BD"
+                />
                 <Text style={styles.placeholderText}>
                   Välj en video för att börja analysera
                 </Text>
@@ -362,7 +386,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           {/* Meta + clear */}
           <View style={styles.inlineRow}>
             <Text style={styles.metaText}>
-              {videoMeta ? `${Math.round(videoMeta.size / 1024 / 1024)} MB` : ""}
+              {videoMeta
+                ? `${Math.round(videoMeta.size / 1024 / 1024)} MB`
+                : ""}
             </Text>
 
             <TouchableOpacity onPress={drawApi?.clear} disabled={!videoFile || !drawApi}>
@@ -377,7 +403,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             <TouchableOpacity
               style={[
                 styles.controlBtn,
-                { backgroundColor: videoDrawing.isRecording ? "#DC3545" : "#34C759" },
+                {
+                  backgroundColor: videoDrawing.isRecording
+                    ? "#DC3545"
+                    : "#34C759",
+                },
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
@@ -445,7 +475,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         <View style={styles.card}>
           <Text style={styles.label}>Nyckelframes</Text>
           {frames.length === 0 ? (
-            <Text style={styles.helperText}>Inga frames ännu (kommer från analys-steget).</Text>
+            <Text style={styles.helperText}>
+              Inga frames ännu (kommer från analys-steget).
+            </Text>
           ) : (
             <FlatList
               horizontal
@@ -460,10 +492,18 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           <View style={styles.divider} />
 
           <Text style={styles.label}>Status</Text>
-          <Text style={styles.statusText}>Transkription: {transcription ? "Klar" : "Ej påbörjad"}</Text>
-          <Text style={styles.statusText}>Rapport: {report ? "Skapad" : "Ej skapad"}</Text>
-          {loading && <Text style={styles.statusText}>Bearbetar...</Text>}
-          {error && <Text style={styles.errorText}>{String(error)}</Text>}
+          <Text style={styles.statusText}>
+            Transkription: {transcription ? "Klar" : "Ej påbörjad"}
+          </Text>
+          <Text style={styles.statusText}>
+            Rapport: {report ? "Skapad" : "Ej skapad"}
+          </Text>
+          {loading && (
+            <Text style={styles.statusText}>Bearbetar...</Text>
+          )}
+          {error && (
+            <Text style={styles.errorText}>{String(error)}</Text>
+          )}
         </View>
       </View>
     </View>

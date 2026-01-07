@@ -11,6 +11,7 @@ import ReportGeneratorView from './src/features/analysis/View/ReportGeneratorVie
 import { useAnalysisVM } from './src/features/analysis/ViewModel/useAnalysisVM';
 
 import CaptureScreen from './src/features/capture/View/CaptureScreen';
+import useCaptureVM from './src/features/capture/ViewModel/useCaptureVM';
 import ReportDetailView from './src/features/userProfiles/View/ReportDetailView';
 
 
@@ -19,6 +20,12 @@ export default function App() {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  const goBack = () => {
+    // simplest: always go back to Home (or Profile, if you prefer)
+    setCurrentScreen('Home');
+    setCurrentParams(null);
+  };
 
   // create analysis VM ONCE per app render, not inside JSX
   const analysisVM = useAnalysisVM({
@@ -26,6 +33,9 @@ export default function App() {
     athleteId: 2,
     sport: 'football',
   });
+
+  const captureVM = useCaptureVM();   // create once
+
 
   // --- NY FUNKTION: Lägg till analys i en profils historik ---
   const addAnalysisToProfile = (profileId, newAnalysis) => {
@@ -104,6 +114,7 @@ export default function App() {
     );
   }
 
+   
   return (
     <View style={{ flex: 1 }}>
       {currentScreen === 'Home' && (
@@ -120,6 +131,10 @@ export default function App() {
 
       {currentScreen === 'Profile' && (
         <ProfileView
+          // ADD THESE TWO PROPS BELOW:
+          profiles={profiles}
+          setProfiles={setProfiles}
+          
           route={{
             params: {
               profile: selectedProfile,
@@ -127,12 +142,10 @@ export default function App() {
                 setProfiles(prev =>
                   prev.map(p => (p.id === updated.id ? updated : p)),
                 );
-                // Uppdatera även det valda profil-statet så vyn inte hoppar tillbaka till gammal data
                 setSelectedProfile(updated); 
               },
             },
           }}
-          // FIX: Lägg till navigate här så ProfileView kan använda den
           navigation={{ 
             goBack: () => setCurrentScreen('Selection'),
             navigate: navigate 
@@ -149,7 +162,10 @@ export default function App() {
       )}
 
       {currentScreen === 'ReportGenerator' && (
-        <ReportGeneratorView navigation={{ navigate }} vm={analysisVM} />
+        <ReportGeneratorView
+          navigation={{ navigate }}
+          route={{ params: { profile: selectedProfile } }}
+        />
       )}
 
       {currentScreen === 'ReportDetail' && selectedReport && (
@@ -163,15 +179,17 @@ export default function App() {
     
       {currentScreen === 'Capture' && (
         <CaptureScreen 
-          navigation={{ navigate }} 
+          navigation={{ navigate, goBack }} 
+          vm={captureVM}
           route={{ 
             params: { 
               returnToProfile: selectedProfile,
-              onSaveAnalysis: addAnalysisToProfile // LÄGG TILL DENNA RAD
+              onSaveAnalysis: addAnalysisToProfile 
             } 
           }} 
         />
       )}
+
 
     </View>
   );
