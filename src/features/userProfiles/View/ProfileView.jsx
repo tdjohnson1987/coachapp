@@ -12,10 +12,11 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import ReportListItem from '../Model/ReportListItem';
+import { useProfileVM } from '../ViewModel/useProfileVM';
 
-const ProfileView = ({ route, navigation }) => {
+const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
   const { profile, onUpdate } = route.params;
-
+  const vm = useProfileVM();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(profile || {});
 
@@ -27,44 +28,51 @@ const ProfileView = ({ route, navigation }) => {
     navigation.navigate('ReportGenerator', { profile: editData });
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setEditData({ ...editData, image: result.assets[0].uri });
+  const handlePickImage = async () => {
+    const uri = await vm.pickImage();
+    if (uri) {
+      setEditData({ ...editData, image: uri }); // Ändrat från setFormData/formData
     }
   };
-
   const handleSave = () => {
     onUpdate(editData);
     setIsEditing(false);
   };
 
   const handleDeleteReport = (reportId) => {
+      Alert.alert("Delete", "Are you sure?", [
+          { text: "No" },
+          { text: "Yes", onPress: () => {
+              const updated = vm.deleteReport(editData, reportId);
+              setEditData(updated);
+              onUpdate(updated);
+          }}
+      ]);
+  };
+  const handleDeleteProfile = () => {
     Alert.alert(
-      'Radera analys',
-      'Är du säker? Detta går inte att ångra.',
+      "Delete Profile",
+      "Are you sure you want to delete this profile?",
       [
-        { text: 'Avbryt', style: 'cancel' },
-        {
-          text: 'Radera',
-          style: 'destructive',
-          onPress: () => {
-            const updatedReports = (editData.reports || []).filter(
-              (r) => r.id !== reportId,
-            );
-            const updatedProfile = { ...editData, reports: updatedReports };
-
-            setEditData(updatedProfile);
-            onUpdate(updatedProfile);
-          },
-        },
-      ],
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            // 1. Ask VM to calculate the new list
+            // We pass the 'profiles' prop here
+            const updatedList = await vm.deleteProfile(editData.id, profiles);
+            
+            if (updatedList) {
+              // 2. Update the state in App.js so the list screen refreshes
+              setProfiles(updatedList);
+              
+              // 3. Go back to the list
+              navigation.goBack();
+            }
+          } 
+        }
+      ]
     );
   };
 
@@ -86,7 +94,7 @@ const ProfileView = ({ route, navigation }) => {
         {/* Profilsektion */}
         <View style={styles.profileSection}>
           <TouchableOpacity
-            onPress={isEditing ? pickImage : null}
+            onPress={isEditing ? handlePickImage: null}
             activeOpacity={isEditing ? 0.7 : 1}
             style={styles.imageWrapper}
           >
@@ -117,7 +125,7 @@ const ProfileView = ({ route, navigation }) => {
                 {editData?.name || 'Namn saknas'}
               </Text>
               <Text style={styles.staticSubInfo}>
-                Ålder: {editData?.age || '--'}  •  Nivå:{' '}
+                Age: {editData?.age || '--'}  •  Level:{' '}
                 {editData?.fitnessLevel || '--'}
               </Text>
 
@@ -126,19 +134,19 @@ const ProfileView = ({ route, navigation }) => {
                 onPress={() => setIsEditing(true)}
               >
                 <Text style={styles.editToggleBtnText}>
-                  Ändra information
+                  Change information
                 </Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <Text style={styles.mainName}>Redigera profil</Text>
+            <Text style={styles.mainName}>Edit profile</Text>
           )}
         </View>
 
         {/* Redigeringsläge */}
         {isEditing && (
           <View style={styles.form}>
-            <Text style={styles.label}>Namn</Text>
+            <Text style={styles.label}>Name</Text>
             <TextInput
               style={styles.input}
               value={editData?.name || ''}
@@ -147,7 +155,7 @@ const ProfileView = ({ route, navigation }) => {
               }
             />
 
-            <Text style={styles.label}>Ålder</Text>
+            <Text style={styles.label}>Age</Text>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
@@ -156,13 +164,12 @@ const ProfileView = ({ route, navigation }) => {
                 setEditData({ ...editData, age: t })
               }
             />
-
             <TouchableOpacity
               style={styles.fullSaveBtn}
               onPress={handleSave}
             >
               <Text style={styles.fullSaveBtnText}>
-                Spara ändringar
+                Save changes
               </Text>
             </TouchableOpacity>
           </View>
@@ -237,6 +244,12 @@ const ProfileView = ({ route, navigation }) => {
             </View>
           </View>
         )}
+        <TouchableOpacity 
+          style={{ marginTop: 40, marginBottom: 20, alignItems: 'center' }}
+          onPress={handleDeleteProfile}
+        >
+          <Text style={{ color: '#FF3B30', fontWeight: '600' }}>Delete Profile</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );

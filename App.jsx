@@ -127,6 +127,10 @@ export default function App() {
 
       {currentScreen === 'Profile' && (
         <ProfileView
+          // ADD THESE TWO PROPS BELOW:
+          profiles={profiles}
+          setProfiles={setProfiles}
+          
           route={{
             params: {
               profile: selectedProfile,
@@ -134,12 +138,10 @@ export default function App() {
                 setProfiles(prev =>
                   prev.map(p => (p.id === updated.id ? updated : p)),
                 );
-                // Uppdatera även det valda profil-statet så vyn inte hoppar tillbaka till gammal data
                 setSelectedProfile(updated); 
               },
             },
           }}
-          // FIX: Lägg till navigate här så ProfileView kan använda den
           navigation={{ 
             goBack: () => setCurrentScreen('Selection'),
             navigate: navigate 
