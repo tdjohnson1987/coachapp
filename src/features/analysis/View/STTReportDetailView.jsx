@@ -7,65 +7,94 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAnalysisVM } from '../ViewModel/useAnalysisVM';
-import useCaptureVM from '../../capture/ViewModel/useCaptureVM';
 import AnalysisCanvas from '../../shared/AnalysisCanvas';
 
-const STTReportDetailView = ({ navigation, route }) => {
-  const { reportId } = route.params;
-  const analysisVM = useAnalysisVM();
-  const captureVM = useCaptureVM();
-
+const STTReportDetailView = ({ navigation, route, analysisVM, captureVM }) => {
+  const reportId = route?.params?.reportId;
   const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-useEffect(() => {
-  const load = async () => {
-    console.log('STT DETAIL reportId', reportId);
-    try {
-      const r = await analysisVM.loadSTTReport(reportId);
-      console.log('STT DETAIL loaded report', r);
-      if (!r) {
-        console.warn('No STT report found for id', reportId);
-      }
-      setReport(r || null);
-      if (r?.drawing) {
-        captureVM.loadSavedReport(r.drawing);
-      }
-    } catch (e) {
-      console.warn('loadSTTReport failed', e);
-      setReport(null);
+  useEffect(() => {
+    if (!reportId) {
+        setError('No Report ID found. Check navigation params.');
+        setLoading(false);
+        return;
     }
-  };
-  load();
-  return () => captureVM.resetVM();
-}, [reportId]);
+
+    let cancelled = false;
+
+    const loadData = async () => {
+        try {
+        console.log('Fetching STT Report:', reportId);
+        const data = await analysisVM.loadSTTReport(reportId);
+
+        if (cancelled) return;
+
+        if (data) {
+            setReport(data);
+            if (data.drawing && captureVM?.loadSavedReport) {
+            captureVM.loadSavedReport(data.drawing);
+            }
+        } else {
+            setError(`Report ${reportId} not found in storage.`);
+        }
+        } catch (err) {
+        if (!cancelled) {
+            console.error('STT Load Error:', err);
+            setError('Failed to load report data.');
+        }
+        } finally {
+        if (!cancelled) {
+            setLoading(false);
+        }
+        }
+    };
+
+    loadData();
+
+    return () => {
+        cancelled = true;
+        if (captureVM?.resetVM) captureVM.resetVM();
+    };
+    }, [reportId]);  // <-- only reportId
 
 
-if (!report) {
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Analysis</Text>
-        <View style={{ width: 24 }} />
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
-      <Text style={{ padding: 20 }}>No STT report found.</Text>
-    </View>
-  );
-}
+    );
+  }
 
+  if (error || !report) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Error</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error || 'Report not found'}</Text>
+        </View>
+      </View>
+    );
+  }
 
-  const created = report.createdAtIso
-    ? new Date(report.createdAtIso).toLocaleString()
-    : '';
+  const created =
+    report.createdAtIso
+      ? new Date(report.createdAtIso).toLocaleDateString()
+      : '';
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={24} color="#007AFF" />
@@ -74,17 +103,48 @@ if (!report) {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.meta}>
           {report.profileName} • {created}
         </Text>
 
+        {report.drawing && captureVM && (
+        <View style={styles.canvasCard}>
+            <Text style={styles.sectionTitle}>Visual Analysis</Text>
+            <View
+            style={styles.pitchWrapper}
+            onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+                if (captureVM.setCanvasSize) {
+                captureVM.setCanvasSize({ w: width, h: height });
+                }
+            }}
+            >
+            {report.drawing.activeImageSource && (
+                <Image
+                source={report.drawing.activeImageSource}
+                style={styles.bgImage}
+                resizeMode="cover"
+                />
+            )}
 
-        {/* Transcription */}
+            {(captureVM?.canvasSize?.w ?? 0) > 1 && (
+                <AnalysisCanvas
+                allToRender={captureVM.allToRender || []}
+                // use the ORIGINAL drawing canvas size for viewBox
+                canvasSize={report.drawing.canvasSize}
+                getArrowHead={captureVM.getArrowHead}
+                />
+            )}
+            </View>
+        </View>
+        )}
+
+
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Transcription</Text>
           <Text style={styles.transcription}>
-            {report.transcription?.fullText || ''}
+            {report.transcription?.fullText || 'No text available.'}
           </Text>
         </View>
       </ScrollView>
@@ -94,6 +154,12 @@ if (!report) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -102,8 +168,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
     backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9ECEF',
   },
   headerTitle: { fontSize: 18, fontWeight: '700' },
+  scrollContent: { padding: 16 },
   meta: { fontSize: 13, color: '#6C757D', marginBottom: 12 },
   canvasCard: {
     backgroundColor: '#FFF',
@@ -117,54 +186,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#0B6E3A',
-    position: 'relative',
   },
-  bgImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    top: 0,
-    left: 0,
-  },
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
+  bgImage: { ...StyleSheet.absoluteFillObject },
+  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16 },
   sectionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   transcription: { fontSize: 14, lineHeight: 20, color: '#495057' },
+  errorText: { color: '#FF3B30', textAlign: 'center', fontSize: 16 },
 });
 
 export default STTReportDetailView;
-
-
-
-        {/* Optional canvas playback */}
-        // {captureVM.canvasSize.w > 0 && (
-        //   <View style={styles.canvasCard}>
-        //     <View
-        //       style={styles.pitchWrapper}
-        //       onLayout={(e) => {
-        //         const { width, height } = e.nativeEvent.layout;
-        //         captureVM.setCanvasSize({ w: width, h: height });
-        //       }}
-        //     >
-        //       {report.drawing?.activeImageSource && (
-        //         <Image
-        //           source={report.drawing.activeImageSource}
-        //           style={styles.bgImage}
-        //           resizeMode="cover"
-        //         />
-        //       )}
-
-        //       {captureVM.canvasSize.w > 1 && (
-        //         <AnalysisCanvas
-        //           width={captureVM.canvasSize.w}
-        //           height={captureVM.canvasSize.h}
-        //           layers={captureVM.allToRender}
-        //         />
-        //       )}
-        //     </View>
-        //   </View>
-        // )}
