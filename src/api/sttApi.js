@@ -1,5 +1,5 @@
 // src/api/sttApi.js
-const STT_ENDPOINT = "http://localhost:8000/stt" // change to your server URL
+const STT_ENDPOINT = "http://192.168.0.137:8000/stt" // change to your server URL
 
 export async function transcribeAudio(audioUri) {
   if (!audioUri) {
