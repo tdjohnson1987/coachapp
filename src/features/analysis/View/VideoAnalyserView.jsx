@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -7,16 +7,19 @@ import {
   FlatList,
   Platform,
 } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
 import { Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 
 import DrawingCanvas from "../../../components/drawing/DrawingCanvas";
 import DrawingToolbar from "../../../components/drawing/DrawingToolbar";
-import useVideoDrawingVM from "../ViewModel/useVideoDrawingVM.js";
+import useVideoAnalyserScreenVM from "../ViewModel/useVideoAnalyserScreenVM.js";
+
+
 
 const VideoAnalyzerView = ({ navigation, vm, route }) => {
-  const videoDrawing = useVideoDrawingVM();
+
+  const screen = useVideoAnalyserScreenVM({ analysisVM: vm });
+  const videoDrawing = screen.videoDrawing;
 
   const returnProfile = route?.params?.returnToProfile;
   const profile = returnProfile || route?.params?.profile;
@@ -40,23 +43,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     addKeyFrame,
   } = vm;
 
-  const videoRef = useRef(null);
-
-  // ✅ state (inte ref) för att undvika "flash" där alla strokes syns direkt
-  const [playbackArmed, setPlaybackArmed] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
-  const [videoKey, setVideoKey] = useState(0);
 
   const d = videoDrawing?.drawing;
 
-  // När REC/PLAYBACK/Armed => rendera strokes från events (tidsstyrt)
-  // annars => rendera "vanlig" ritning (om ni använder det läget)
-  const strokesForCanvas =
-    (videoDrawing.isRecording || videoDrawing.isPlayback || playbackArmed)
-      ? (videoDrawing.strokesToRender ?? [])
-      : (d?.allToRender ?? d?.strokes ?? []);
 
   // Adapter för DrawingToolbar + touch-layer
   const drawApi = d
@@ -76,148 +65,6 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     }
     : null;
 
-  const handlePickVideo = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["video/*"],
-      copyToCacheDirectory: true,
-    });
-    if (result.canceled) return;
-
-    const file = result.assets?.[0];
-    if (!file?.uri) return;
-
-    // stoppa video
-    try { await videoRef.current?.stopAsync?.(); } catch { }
-
-    // nollställ UI + VM
-    setPlaybackArmed(false);
-    setIsPlaying(false);
-    await videoDrawing.clearAll?.();
-
-    // tvinga nytt Video-instant
-    setVideoKey((k) => k + 1);
-
-    await loadVideo({
-      uri: file.uri,
-      name: file.name ?? "video.mp4",
-      size: file.size ?? 0,
-      type: file.mimeType ?? "video/mp4",
-    });
-
-    // starta från 0 visuellt/logiskt
-    videoDrawing.setVideoTimeMs?.(0);
-    try { await videoRef.current?.setPositionAsync?.(0); } catch { }
-  };
-
-  const togglePlay = async () => {
-    if (!videoFile) return;
-
-    if (Platform.OS === "web") {
-      setIsPlaying((p) => !p);
-      return;
-    }
-
-    try {
-      if (isPlaying) {
-        await videoRef.current?.pauseAsync?.();
-        setIsPlaying(false);
-      } else {
-        await videoRef.current?.playAsync?.();
-        setIsPlaying(true);
-      }
-    } catch (e) {
-      console.warn("play/pause failed", e);
-    }
-  };
-
-  const getVideoPosMs = async () => {
-    try {
-      const st = await videoRef.current?.getStatusAsync?.();
-      if (st?.isLoaded) return st.positionMillis ?? 0;
-    } catch { }
-    return 0;
-  };
-
-  const toggleRecording = async () => {
-    if (!videoFile) return;
-
-    // om playback kör -> stoppa
-    if (videoDrawing.isPlayback || playbackArmed) {
-      setPlaybackArmed(false);
-      await videoDrawing.stopPlayback?.();
-      try {
-        await videoRef.current?.pauseAsync?.();
-      } catch { }
-      setIsPlaying(false);
-    }
-
-    // STOP REC
-    if (videoDrawing.isRecording) {
-      const endMs = await getVideoPosMs();
-      await videoDrawing.stopRecording?.({ endVideoMs: endMs });
-
-      // pausa när man stoppar rec (som ni vill)
-      try { await videoRef.current?.pauseAsync?.(); } catch { }
-      setIsPlaying(false);
-      return;
-    }
-
-    // START REC (startar INTE videon — du vill kunna rita på stillbild)
-    const startMs = await getVideoPosMs();
-    await videoDrawing.startRecording?.({ startVideoMs: startMs });
-  };
-
-  const togglePlayback = async () => {
-    if (!videoFile) return;
-
-    const range = videoDrawing.getClipRange?.();
-    const startMs = range?.startMs;
-    const endMs = range?.endMs;
-    if (typeof startMs !== "number" || typeof endMs !== "number") return;
-
-    // STOP playback
-    if (playbackArmed || videoDrawing.isPlayback) {
-      setPlaybackArmed(false);
-      await videoDrawing.stopPlayback?.();
-      try {
-        await videoRef.current?.pauseAsync?.();
-      } catch { }
-      setIsPlaying(false);
-      return;
-    }
-
-    // ✅ ARM först så vi INTE flashar "alla strokes"
-    setPlaybackArmed(true);
-
-    try {
-      // sätt video & playhead till clip-start
-      await videoRef.current?.setPositionAsync?.(startMs);
-      videoDrawing.setVideoTimeMs?.(startMs);
-
-      // starta VM playback (ljud + flaggor)
-      await videoDrawing.startPlayback?.();
-
-      // spela video
-      await videoRef.current?.playAsync?.();
-      setIsPlaying(true);
-    } catch (e) {
-      console.warn("playback start failed", e);
-      setPlaybackArmed(false);
-    }
-  };
-
-  const handleReset = async () => {
-    // stoppa allt
-    setPlaybackArmed(false);
-    setIsPlaying(false);
-
-    try { await videoRef.current?.pauseAsync?.(); } catch { }
-    try { await videoRef.current?.setPositionAsync?.(0); } catch { }
-
-    await videoDrawing.clearAll?.();
-    videoDrawing.setVideoTimeMs?.(0);
-  };
-
   const renderFrameItem = ({ item }) => {
     const isSelected = selectedFrames.includes(item.id);
     return (
@@ -232,12 +79,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     );
   };
 
-  const range = videoDrawing.getClipRange?.();
-  const clipReady =
-    !!videoFile &&
-    typeof range?.startMs === "number" &&
-    typeof range?.endMs === "number" &&
-    range.endMs > range.startMs;
+  const clipReady = screen.clipReady;
+
 
   return (
     <View style={styles.container}>
@@ -274,8 +117,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           <Text style={styles.label}>Videokälla</Text>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={handlePickVideo}
-          >
+            onPress={screen.handlePickVideo}          >
             <Text style={styles.primaryButtonText}>
               {videoMeta ? "Byt video" : "Välj video"}
             </Text>
@@ -288,7 +130,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             style={styles.videoWrapper}
             onLayout={(e) => {
               const { width, height } = e.nativeEvent.layout;
-              setCanvasSize({ w: width || 1, h: height || 1 });
+              screen.setCanvasSize({ w: width || 1, h: height || 1 });
             }}
           >
             {videoFile ? (
@@ -304,44 +146,21 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                         display: "block",
                       }}
                       controls
-                      autoPlay={isPlaying}
+                      autoPlay={screen.isPlaying}
                     />
                   </View>
                 ) : (
                   <Video
-                    key={`${videoKey}-${videoFile?.uri ?? ""}`}
-                    ref={videoRef}
+                    key={`${screen.videoKey}-${videoFile?.uri ?? ""}`}
+                    ref={screen.videoRef}
                     source={{ uri: videoFile.uri }}
                     style={styles.video}
                     resizeMode="contain"
-                    shouldPlay={isPlaying}
+                    shouldPlay={screen.isPlaying}
                     useNativeControls={false}
-                    onPlaybackStatusUpdate={async (status) => {
-                      if (!status?.isLoaded) return;
+                    onPlaybackStatusUpdate={screen.onPlaybackStatusUpdate}
 
-                      const pos = status.positionMillis ?? 0;
 
-                      // viktigt: uppdatera tiden för timed replay
-                      videoDrawing.setVideoTimeMs?.(pos);
-
-                      // stoppa playback vid endMs
-                      const r = videoDrawing.getClipRange?.();
-                      const endMs = r?.endMs;
-
-                      if ((playbackArmed || videoDrawing.isPlayback) && typeof endMs === "number" && pos >= endMs) {
-                        setPlaybackArmed(false);
-                        try { await videoRef.current?.pauseAsync?.(); } catch { }
-                        setIsPlaying(false);
-                        await videoDrawing.stopPlayback?.();
-                        return;
-                      }
-
-                      if (status.didJustFinish) {
-                        setPlaybackArmed(false);
-                        setIsPlaying(false);
-                        await videoDrawing.stopPlayback?.();
-                      }
-                    }}
                   />
                 )}
 
@@ -351,9 +170,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                   pointerEvents="none"
                 >
                   <DrawingCanvas
-                    strokes={strokesForCanvas}
-                    width={canvasSize.w}
-                    height={canvasSize.h}
+                    strokes={screen.strokesForCanvas}
+                    width={screen.canvasSize.w}
+                    height={screen.canvasSize.h}
                   />
                 </View>
 
@@ -410,8 +229,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
-              onPress={toggleRecording}
-            >
+              onPress={screen.toggleRecording}            >
               <Text style={styles.controlBtnText}>
                 {videoDrawing.isRecording ? "STOP REC" : "REC"}
               </Text>
@@ -424,10 +242,9 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 !clipReady && styles.controlBtnDisabled,
               ]}
               disabled={!clipReady}
-              onPress={togglePlayback}
-            >
+              onPress={screen.togglePlayback}            >
               <Text style={styles.controlBtnText}>
-                {(playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
+                {(screen.playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
               </Text>
             </TouchableOpacity>
 
@@ -438,9 +255,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
-              onPress={togglePlay}
-            >
-              <Text style={styles.controlBtnText}>{isPlaying ? "PAUSE" : "PLAY"}</Text>
+              onPress={screen.togglePlay}            >
+              <Text style={styles.controlBtnText}>{screen.isPlaying ? "PAUSE" : "PLAY"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -450,7 +266,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
-              onPress={handleReset}
+              onPress={screen.handleReset}
             >
               <Text style={styles.controlBtnText}>RESET</Text>
             </TouchableOpacity>
