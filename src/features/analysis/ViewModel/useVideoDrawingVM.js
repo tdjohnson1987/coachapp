@@ -3,7 +3,6 @@ import { Audio } from "expo-av";
 import useDrawingVM from "../../../components/drawing/useDrawingVM";
 
 export default function useVideoDrawingVM() {
-    // ----- video time (ABS, ms) -----
     const [videoTimeAbsMs, setVideoTimeAbsMs] = useState(0);
     const videoTimeAbsRef = useRef(0);
 
@@ -13,7 +12,6 @@ export default function useVideoDrawingVM() {
         setVideoTimeAbsMs(v);
     };
 
-    // ----- clip range in video time -----
     const clipStartMsRef = useRef(null);
     const clipEndMsRef = useRef(null);
 
@@ -22,14 +20,12 @@ export default function useVideoDrawingVM() {
         endMs: clipEndMsRef.current,
     });
 
-    // ----- recording / playback flags -----
     const [isRecording, setIsRecording] = useState(false);
     const [isPlayback, setIsPlayback] = useState(false);
     const [isPlaybackArmed, setIsPlaybackArmed] = useState(false);
 
     const isRecordingRef = useRef(false);
 
-    // ----- events + audio -----
     const [recordedEvents, setRecordedEvents] = useState([]);
     const [audioUri, setAudioUri] = useState(null);
 
@@ -43,7 +39,6 @@ export default function useVideoDrawingVM() {
     };
 
 
-    // playback time base uses video position - clipStart
     const getRelMsPlayback = () => {
         const s = clipStartMsRef.current ?? 0;
         return Math.max(0, (videoTimeAbsMs ?? 0) - s);
@@ -73,7 +68,6 @@ export default function useVideoDrawingVM() {
     };
 
 
-    // Sort events for stable replay
     const eventsSorted = useMemo(() => {
         return [...recordedEvents].sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
     }, [recordedEvents]);
@@ -84,7 +78,6 @@ export default function useVideoDrawingVM() {
     };
 
 
-    // ----- Drawing VM (records detailed stroke build) -----
     const drawing = useDrawingVM({
         enabled: true,
 
@@ -117,7 +110,6 @@ export default function useVideoDrawingVM() {
         },
     });
 
-    // ----- clear/reset -----
     const clearAll = async () => {
         drawing?.clear?.();
 
@@ -154,7 +146,6 @@ export default function useVideoDrawingVM() {
         audioRecRef.current = null;
     };
 
-    // ----- recording -----
     const startRecording = async ({ startVideoMs } = {}) => {
 
         recWallStartRef.current = Date.now();
@@ -236,7 +227,6 @@ export default function useVideoDrawingVM() {
 
     };
 
-    // ----- playback controls -----
     const armPlayback = () => setIsPlaybackArmed(true);
     const disarmPlayback = () => setIsPlaybackArmed(false);
 
@@ -277,7 +267,6 @@ export default function useVideoDrawingVM() {
         } catch { }
     };
 
-    // ----- build strokes for time t (ms relative) -----
     const buildStrokesAtTime = (t) => {
         let done = [];
         const building = new Map();
@@ -315,52 +304,41 @@ export default function useVideoDrawingVM() {
             }
         }
 
-        // visa även strokes som fortfarande byggs (så man ser “pennan”)
         for (const s of building.values()) done.push(s);
 
         return done;
     };
 
-    // ----- strokesToRender (the thing UI should use) -----
     const strokesToRender = useMemo(() => {
         if (isRecording) return buildStrokesAtTime(getTimelineMs());
         if (isPlayback) return buildStrokesAtTime(playbackTimelineMs);
 
-        // i idle-läge: visa allt (om du vill)
         return buildStrokesAtTime(Number.POSITIVE_INFINITY);
     }, [isRecording, isPlayback, playbackTimelineMs, eventsSorted]);
 
     return {
         drawing,
-
-        // state
         isRecording,
         isPlayback,
         isPlaybackArmed,
-
         recordedEvents,
         audioUri,
+        strokesToRender,
 
-        // clip + time
+
         getClipRange,
         setVideoTimeMs,
-
-        // actions
         startRecording,
         stopRecording,
-
         armPlayback,
         disarmPlayback,
         startPlayback,
         stopPlayback,
-
         clearAll,
         pushMetaEvent,
         setPlaybackTimeline,
         getTimelineDuration,
         getTimelineNow,
 
-        // render
-        strokesToRender,
     };
 }

@@ -3,14 +3,12 @@ import { Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import useVideoDrawingVM from "./useVideoDrawingVM";
 
-// Denna VM äger all “screen-orchestration” för VideoAnalyserView.
-// Den tar in "analysis vm" (din vm-prop i view) som dependency.
+
 export default function useVideoAnalyserScreenVM({ analysisVM }) {
     const videoDrawing = useVideoDrawingVM();
 
     const videoRef = useRef(null);
 
-    // UI-state som tidigare låg i View
     const [playbackArmed, setPlaybackArmed] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
@@ -33,7 +31,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         playbackTimerRef.current = setInterval(async () => {
             const t = Date.now() - (playbackWallStartRef.current ?? Date.now());
 
-            // driv ritningens playback-tid (timeline)
             videoDrawing.setPlaybackTimeline?.(t);
 
             const ref = playbackMetaRef.current;
@@ -59,10 +56,8 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
                 } catch { }
             }
 
-
             const dur = videoDrawing.getTimelineDuration?.() ?? 0;
 
-            // stoppa när timeline är slut (inte när videon når endMs)
             if (t >= dur + 50) {
                 stopPlaybackTimer();
                 setPlaybackArmed(false);
@@ -74,8 +69,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
     };
 
     const playbackMetaRef = useRef({ events: [], idx: 0 }); //Här?
-
-
 
     const {
         videoFile,
@@ -91,7 +84,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         addKeyFrame,
     } = analysisVM;
 
-    // --- helpers ---
     const getVideoPosMs = async () => {
         try {
             const st = await videoRef.current?.getStatusAsync?.();
@@ -107,8 +99,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         typeof clipRange?.endMs === "number" &&
         clipRange.endMs > clipRange.startMs;
 
-    // --- actions (flyttade från View) ---
-
     const handlePickVideo = async () => {
         stopPlaybackTimer();
 
@@ -121,17 +111,14 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         const file = result.assets?.[0];
         if (!file?.uri) return;
 
-        // stoppa video
         try {
             await videoRef.current?.stopAsync?.();
         } catch { }
 
-        // nollställ UI + VM
         setPlaybackArmed(false);
         setIsPlaying(false);
         await videoDrawing.clearAll?.();
 
-        // tvinga nytt Video-instant
         setVideoKey((k) => k + 1);
 
         await loadVideo({
@@ -141,7 +128,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
             type: file.mimeType ?? "video/mp4",
         });
 
-        // starta från 0 visuellt/logiskt
         videoDrawing.setVideoTimeMs?.(0);
         try {
             await videoRef.current?.setPositionAsync?.(0);
@@ -152,14 +138,10 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         if (!videoFile) return;
 
         if (Platform.OS === "web") {
-            // Web: du kan logga event även här om du har video-elementet,
-            // men med din nuvarande setup skippar vi web för enkelhet.
-            setIsPlaying((p) => !p);
             return;
         }
 
         try {
-            // Hämta position + timeline FÖRE vi togglar (så eventet blir korrekt tidsstämplat)
             const posMs = await getVideoPosMs();
             const t = videoDrawing.getTimelineNow?.() ?? 0;
 
@@ -186,7 +168,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
     const toggleRecording = async () => {
         if (!videoFile) return;
 
-        // Om playback kör -> stoppa playback + timer + video
         if (videoDrawing.isPlayback || playbackArmed) {
             setPlaybackArmed(false);
             await videoDrawing.stopPlayback?.();
@@ -198,12 +179,10 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
             setIsPlaying(false);
         }
 
-        // STOP REC
         if (videoDrawing.isRecording) {
             const endMs = await getVideoPosMs();
             await videoDrawing.stopRecording?.({ endVideoMs: endMs });
 
-            // pausa när man stoppar rec
             try {
                 await videoRef.current?.pauseAsync?.();
             } catch { }
@@ -212,12 +191,9 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
             return;
         }
 
-        // START REC (startar INTE videon — man vill kunna rita på stillbild)
         const startMs = await getVideoPosMs();
         await videoDrawing.startRecording?.({ startVideoMs: startMs });
 
-        // Logga initialt videoläge vid start av inspelning
-        // (så playback kan veta om videon var pausad eller spelade när inspelningen började)
         const t0 = videoDrawing.getTimelineNow?.() ?? 0;
         videoDrawing.pushMetaEvent?.({
             type: isPlaying ? "video-play" : "video-pause",
@@ -235,7 +211,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         const endMs = range?.endMs;
         if (typeof startMs !== "number" || typeof endMs !== "number") return;
 
-        // STOP playback
         if (playbackArmed || videoDrawing.isPlayback) {
             stopPlaybackTimer();
             playbackMetaRef.current = { events: [], idx: 0 };
@@ -265,7 +240,7 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
             await videoRef.current?.playAsync?.();
             setIsPlaying(true);
 
-            await startPlaybackTimer(); // ✅ starta timern här
+            await startPlaybackTimer();
         } catch (e) {
             console.warn("playback start failed", e);
             stopPlaybackTimer();
@@ -289,16 +264,11 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         videoDrawing.setVideoTimeMs?.(0);
     };
 
-    // Flyttad logik från onPlaybackStatusUpdate i View
     const onPlaybackStatusUpdate = async (status) => {
         if (!status?.isLoaded) return;
 
         const pos = status.positionMillis ?? 0;
-
-        // viktigt: uppdatera tiden för timed replay
         videoDrawing.setVideoTimeMs?.(pos);
-
-
 
         if (status.didJustFinish) {
             stopPlaybackTimer();
@@ -306,10 +276,8 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
             setIsPlaying(false);
             await videoDrawing.stopPlayback?.();
         }
-
     };
 
-    // strokesForCanvas-beräkningen flyttas också (så View inte behöver “veta”)
     const strokesForCanvas = useMemo(() => {
         const d = videoDrawing?.drawing;
 
@@ -319,7 +287,6 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
     }, [videoDrawing, playbackArmed]);
 
     return {
-        // från analysisVM (till View)
         videoFile,
         videoMeta,
         frames,
@@ -330,22 +297,15 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         error,
         toggleFrameSelection,
         addKeyFrame,
-
-        // video refs/state
         videoRef,
         isPlaying,
         playbackArmed,
         canvasSize,
         videoKey,
-
-        // drawing VM (till View)
         videoDrawing,
         strokesForCanvas,
-
-        // computed
         clipReady,
 
-        // handlers
         setCanvasSize,
         handlePickVideo,
         togglePlay,
