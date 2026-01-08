@@ -15,6 +15,67 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
     const [videoKey, setVideoKey] = useState(0);
+    const playbackTimerRef = useRef(null);
+    const playbackWallStartRef = useRef(null);
+
+    const stopPlaybackTimer = () => {
+        if (playbackTimerRef.current) {
+            clearInterval(playbackTimerRef.current);
+            playbackTimerRef.current = null;
+        }
+        playbackWallStartRef.current = null;
+    };
+
+    const startPlaybackTimer = async () => {
+        stopPlaybackTimer();
+        playbackWallStartRef.current = Date.now();
+
+        playbackTimerRef.current = setInterval(async () => {
+            const t = Date.now() - (playbackWallStartRef.current ?? Date.now());
+
+            // driv ritningens playback-tid (timeline)
+            videoDrawing.setPlaybackTimeline?.(t);
+
+            const ref = playbackMetaRef.current;
+
+            while (ref.idx < ref.events.length && (ref.events[ref.idx].t ?? 0) <= t) {
+                const ev = ref.events[ref.idx];
+                ref.idx += 1;
+
+                try {
+                    // hoppa till positionen som spelades in när play/pause klickades
+                    if (typeof ev.posMs === "number") {
+                        await videoRef.current?.setPositionAsync?.(ev.posMs);
+                        videoDrawing.setVideoTimeMs?.(ev.posMs);
+                    }
+
+                    if (ev.type === "video-pause") {
+                        await videoRef.current?.pauseAsync?.();
+                        setIsPlaying(false);
+                    } else if (ev.type === "video-play") {
+                        await videoRef.current?.playAsync?.();
+                        setIsPlaying(true);
+                    }
+                } catch { }
+            }
+
+
+            const dur = videoDrawing.getTimelineDuration?.() ?? 0;
+
+            // stoppa när timeline är slut (inte när videon når endMs)
+            if (t >= dur + 50) {
+                stopPlaybackTimer();
+                setPlaybackArmed(false);
+                try { await videoRef.current?.pauseAsync?.(); } catch { }
+                setIsPlaying(false);
+                await videoDrawing.stopPlayback?.();
+            }
+        }, 33);
+    };
+
+    const playbackMetaRef = useRef({ events: [], idx: 0 }); //Här?
+
+
 
     const {
         videoFile,
@@ -49,6 +110,8 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
     // --- actions (flyttade från View) ---
 
     const handlePickVideo = async () => {
+        stopPlaybackTimer();
+
         const result = await DocumentPicker.getDocumentAsync({
             type: ["video/*"],
             copyToCacheDirectory: true,
@@ -89,11 +152,25 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         if (!videoFile) return;
 
         if (Platform.OS === "web") {
+            // Web: du kan logga event även här om du har video-elementet,
+            // men med din nuvarande setup skippar vi web för enkelhet.
             setIsPlaying((p) => !p);
             return;
         }
 
         try {
+            // Hämta position + timeline FÖRE vi togglar (så eventet blir korrekt tidsstämplat)
+            const posMs = await getVideoPosMs();
+            const t = videoDrawing.getTimelineNow?.() ?? 0;
+
+            if (videoDrawing.isRecording) {
+                videoDrawing.pushMetaEvent?.({
+                    type: isPlaying ? "video-pause" : "video-play",
+                    t,
+                    posMs,
+                });
+            }
+
             if (isPlaying) {
                 await videoRef.current?.pauseAsync?.();
                 setIsPlaying(false);
@@ -109,10 +186,12 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
     const toggleRecording = async () => {
         if (!videoFile) return;
 
-        // om playback kör -> stoppa
+        // Om playback kör -> stoppa playback + timer + video
         if (videoDrawing.isPlayback || playbackArmed) {
             setPlaybackArmed(false);
             await videoDrawing.stopPlayback?.();
+            stopPlaybackTimer();
+
             try {
                 await videoRef.current?.pauseAsync?.();
             } catch { }
@@ -124,18 +203,29 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
             const endMs = await getVideoPosMs();
             await videoDrawing.stopRecording?.({ endVideoMs: endMs });
 
-            // pausa när man stoppar rec (som ni vill)
+            // pausa när man stoppar rec
             try {
                 await videoRef.current?.pauseAsync?.();
             } catch { }
             setIsPlaying(false);
+
             return;
         }
 
         // START REC (startar INTE videon — man vill kunna rita på stillbild)
         const startMs = await getVideoPosMs();
         await videoDrawing.startRecording?.({ startVideoMs: startMs });
+
+        // Logga initialt videoläge vid start av inspelning
+        // (så playback kan veta om videon var pausad eller spelade när inspelningen började)
+        const t0 = videoDrawing.getTimelineNow?.() ?? 0;
+        videoDrawing.pushMetaEvent?.({
+            type: isPlaying ? "video-play" : "video-pause",
+            t: t0,
+            posMs: startMs,
+        });
     };
+
 
     const togglePlayback = async () => {
         if (!videoFile) return;
@@ -147,36 +237,44 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
 
         // STOP playback
         if (playbackArmed || videoDrawing.isPlayback) {
+            stopPlaybackTimer();
+            playbackMetaRef.current = { events: [], idx: 0 };
             setPlaybackArmed(false);
             await videoDrawing.stopPlayback?.();
-            try {
-                await videoRef.current?.pauseAsync?.();
-            } catch { }
+            try { await videoRef.current?.pauseAsync?.(); } catch { }
             setIsPlaying(false);
             return;
         }
 
-        // ARM först så vi INTE flashar "alla strokes"
         setPlaybackArmed(true);
 
         try {
-            // sätt video & playhead till clip-start
             await videoRef.current?.setPositionAsync?.(startMs);
             videoDrawing.setVideoTimeMs?.(startMs);
 
-            // starta VM playback (ljud + flaggor)
             await videoDrawing.startPlayback?.();
 
-            // spela video
+            const meta = (videoDrawing.recordedEvents ?? [])
+                .filter(e => e?.type === "video-play" || e?.type === "video-pause")
+                .slice()
+                .sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
+
+            playbackMetaRef.current = { events: meta, idx: 0 };
+
+
             await videoRef.current?.playAsync?.();
             setIsPlaying(true);
+
+            await startPlaybackTimer(); // ✅ starta timern här
         } catch (e) {
             console.warn("playback start failed", e);
+            stopPlaybackTimer();
             setPlaybackArmed(false);
         }
     };
 
     const handleReset = async () => {
+        stopPlaybackTimer();
         setPlaybackArmed(false);
         setIsPlaying(false);
 
@@ -200,29 +298,15 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         // viktigt: uppdatera tiden för timed replay
         videoDrawing.setVideoTimeMs?.(pos);
 
-        // stoppa playback vid endMs
-        const r = videoDrawing.getClipRange?.();
-        const endMs = r?.endMs;
 
-        if (
-            (playbackArmed || videoDrawing.isPlayback) &&
-            typeof endMs === "number" &&
-            pos >= endMs
-        ) {
-            setPlaybackArmed(false);
-            try {
-                await videoRef.current?.pauseAsync?.();
-            } catch { }
-            setIsPlaying(false);
-            await videoDrawing.stopPlayback?.();
-            return;
-        }
 
         if (status.didJustFinish) {
+            stopPlaybackTimer();
             setPlaybackArmed(false);
             setIsPlaying(false);
             await videoDrawing.stopPlayback?.();
         }
+
     };
 
     // strokesForCanvas-beräkningen flyttas också (så View inte behöver “veta”)

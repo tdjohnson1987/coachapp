@@ -36,13 +36,12 @@ export default function useVideoDrawingVM() {
     const audioRecRef = useRef(null);
     const audioSoundRef = useRef(null);
 
-    // ----- recording time base (wall clock) -----
-    const recWallStartRef = useRef(null);
-
     const getRelMsRecording = () => {
-        const s = recWallStartRef.current ?? Date.now();
-        return Math.max(0, Date.now() - s);
+        const startAbs = clipStartMsRef.current ?? 0;
+        const nowAbs = videoTimeAbsRef.current ?? 0;
+        return Math.max(0, nowAbs - startAbs);
     };
+
 
     // playback time base uses video position - clipStart
     const getRelMsPlayback = () => {
@@ -50,47 +49,71 @@ export default function useVideoDrawingVM() {
         return Math.max(0, (videoTimeAbsMs ?? 0) - s);
     };
 
-    const pushEvent = (evt) => {
-        setRecordedEvents((prev) => [...prev, evt]);
+    const pushEvent = (evt) => setRecordedEvents((prev) => [...prev, evt]);
+    const pushMetaEvent = pushEvent;
+
+
+
+    const recWallStartRef = useRef(null);
+    const getTimelineMs = () => {
+        const s = recWallStartRef.current ?? Date.now();
+        return Math.max(0, Date.now() - s);
     };
+
+    const getTimelineNow = () => getTimelineMs();
+
+
+    const [playbackTimelineMs, setPlaybackTimelineMs] = useState(0);
+    const playbackTimelineRef = useRef(0);
+
+    const setPlaybackTimeline = (ms) => {
+        const v = ms ?? 0;
+        playbackTimelineRef.current = v;
+        setPlaybackTimelineMs(v);
+    };
+
 
     // Sort events for stable replay
     const eventsSorted = useMemo(() => {
         return [...recordedEvents].sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
     }, [recordedEvents]);
 
+    const getTimelineDuration = () => {
+        const last = eventsSorted.length ? (eventsSorted[eventsSorted.length - 1].t ?? 0) : 0;
+        return last;
+    };
+
+
     // ----- Drawing VM (records detailed stroke build) -----
     const drawing = useDrawingVM({
         enabled: true,
 
-        // EXPECTED payload: { id, stroke }
         onStrokeStart: ({ id, stroke }) => {
             if (!isRecordingRef.current) return;
             if (!id || !stroke) return;
-            pushEvent({ type: "stroke-start", t: getRelMsRecording(), id, stroke });
+            pushEvent({ type: "stroke-start", t: getTimelineMs(), id, stroke });
         },
 
-        // EXPECTED payload: { id, stroke } (updated stroke)
         onStrokePoint: ({ id, stroke }) => {
             if (!isRecordingRef.current) return;
             if (!id || !stroke) return;
-            pushEvent({ type: "stroke-point", t: getRelMsRecording(), id, stroke });
+            pushEvent({ type: "stroke-point", t: getTimelineMs(), id, stroke });
         },
 
         onStrokeEnd: ({ id }) => {
             if (!isRecordingRef.current) return;
             if (!id) return;
-            pushEvent({ type: "stroke-end", t: getRelMsRecording(), id });
+            pushEvent({ type: "stroke-end", t: getTimelineMs(), id });
         },
 
         onUndo: () => {
             if (!isRecordingRef.current) return;
-            pushEvent({ type: "undo", t: getRelMsRecording() });
+            pushEvent({ type: "undo", t: getTimelineMs() });
         },
 
         onClear: () => {
             if (!isRecordingRef.current) return;
-            pushEvent({ type: "clear", t: getRelMsRecording() });
+            pushEvent({ type: "clear", t: getTimelineMs() });
         },
     });
 
@@ -111,8 +134,11 @@ export default function useVideoDrawingVM() {
         setIsPlayback(false);
         setIsPlaybackArmed(false);
 
-        isRecordingRef.current = false;
         recWallStartRef.current = null;
+        setPlaybackTimeline(0);
+
+
+        isRecordingRef.current = false;
 
         try {
             await audioSoundRef.current?.stopAsync?.();
@@ -130,7 +156,9 @@ export default function useVideoDrawingVM() {
 
     // ----- recording -----
     const startRecording = async ({ startVideoMs } = {}) => {
+
         recWallStartRef.current = Date.now();
+
 
         const startAbs =
             typeof startVideoMs === "number" ? startVideoMs : videoTimeAbsRef.current ?? 0;
@@ -164,22 +192,23 @@ export default function useVideoDrawingVM() {
             console.warn("audio record start failed", e);
             audioRecRef.current = null;
         }
+
+
     };
 
     const stopRecording = async ({ endVideoMs } = {}) => {
         const startAbs = clipStartMsRef.current ?? 0;
 
-        // hur länge ritningen spelades in (ms)
+
         const dur = getRelMsRecording();
         const computedEnd = startAbs + dur;
 
         const endAbs =
             typeof endVideoMs === "number" ? endVideoMs : videoTimeAbsRef.current ?? 0;
 
-        // Om videon stod still (endAbs == startAbs) -> använd computedEnd
-        clipEndMsRef.current = endAbs > startAbs ? endAbs : computedEnd;
 
-        recWallStartRef.current = null;
+        clipEndMsRef.current = Math.max(endAbs, computedEnd);
+
 
         setIsRecording(false);
         isRecordingRef.current = false;
@@ -202,6 +231,9 @@ export default function useVideoDrawingVM() {
         } finally {
             audioRecRef.current = null;
         }
+
+        recWallStartRef.current = null;
+
     };
 
     // ----- playback controls -----
@@ -211,6 +243,8 @@ export default function useVideoDrawingVM() {
     const startPlayback = async () => {
         setIsPlayback(true);
         setIsPlaybackArmed(true);
+        setPlaybackTimeline(0);
+
 
         if (audioUri) {
             try {
@@ -236,6 +270,8 @@ export default function useVideoDrawingVM() {
     const stopPlayback = async () => {
         setIsPlayback(false);
         setIsPlaybackArmed(false);
+        setPlaybackTimeline(0);
+
         try {
             await audioSoundRef.current?.stopAsync?.();
         } catch { }
@@ -287,12 +323,12 @@ export default function useVideoDrawingVM() {
 
     // ----- strokesToRender (the thing UI should use) -----
     const strokesToRender = useMemo(() => {
-        if (isRecording) return buildStrokesAtTime(getRelMsRecording());
-        if (isPlayback) return buildStrokesAtTime(getRelMsPlayback());
+        if (isRecording) return buildStrokesAtTime(getTimelineMs());
+        if (isPlayback) return buildStrokesAtTime(playbackTimelineMs);
 
         // i idle-läge: visa allt (om du vill)
         return buildStrokesAtTime(Number.POSITIVE_INFINITY);
-    }, [isRecording, isPlayback, videoTimeAbsMs, eventsSorted]);
+    }, [isRecording, isPlayback, playbackTimelineMs, eventsSorted]);
 
     return {
         drawing,
@@ -319,6 +355,10 @@ export default function useVideoDrawingVM() {
         stopPlayback,
 
         clearAll,
+        pushMetaEvent,
+        setPlaybackTimeline,
+        getTimelineDuration,
+        getTimelineNow,
 
         // render
         strokesToRender,
