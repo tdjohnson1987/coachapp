@@ -64,24 +64,40 @@ export const useAnalysisVM = (context) => {
     return built;
   };
 
-  const generateSTTFromSnapshot = async ({ profile, snapshot }) => {
-    if (!currentAthleteId || !currentCoachId) return null;
-    setSttLoading(true);
-    try {
-      const transcription = await STTAnalysisService.transcribeAudioFile(snapshot.audioUri);
-      const report = STTAnalysisService.buildFromDrawingSnapshot({
-        coachId: currentCoachId,
-        athleteId: currentAthleteId,
-        profileName: profile?.name,
-        snapshot,
-        transcription,
-      });
-      const saved = await STTAnalysisService.persist(report);
-      return saved; 
-    } finally {
-      setSttLoading(false);
-    }
-  };
+    const generateSTTFromSnapshot = async ({ profile, snapshot }) => {
+      if (!profile || !profile.id || !snapshot?.audioUri) {
+        return null;
+      }
+      if (!currentAthleteId || !currentCoachId) {
+        return null;
+      }
+
+      setSttLoading(true);
+      try {
+        const transcription = await STTAnalysisService.transcribeAudioFile(
+          snapshot.audioUri,
+        );
+        if (!transcription || !transcription.fullText) {
+          return null;
+        }
+
+        const report = STTAnalysisService.buildFromDrawingSnapshot({
+          coachId: currentCoachId,
+          athleteId: currentAthleteId,
+          profileName: profile.name,
+          snapshot,
+          transcription,
+        });
+        return await STTAnalysisService.persist(report);
+      } catch (e) {
+        console.warn('generateSTTFromSnapshot failed', e);
+        return null;
+      } finally {
+        setSttLoading(false);
+      }
+    };
+
+
 
   const loadSTTReportsForAthlete = async (athleteId) => {
     setSttLoading(true);

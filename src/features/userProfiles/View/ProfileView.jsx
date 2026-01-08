@@ -113,33 +113,42 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
 
                 // 2) Generate STT report
                 try {
-                  const sttReport = await analysisVM.generateSTTFromSnapshot({
-                    profile: updatedProfile,
-                    snapshot,
-                  });
-                  if (sttReport) {
-                // 3) Add a lightweight STT entry pointing to the full STT report
-                  const sttSummary = {
-                      id: sttReport.reportId,                  // used for navigation
-                      title: sttReport.title || snapshot.title,
-                      type: 'Drawing+STT',
-                      date: snapshot.date,
-                      time: snapshot.time,
-                      // optional: short preview text
-                      preview: sttReport.transcription.fullText.slice(0, 80),
-                    };
+                 const sttReport = await analysisVM.generateSTTFromSnapshot({
+                  profile: updatedProfile,
+                  snapshot,
+                });
 
-                  const updatedWithSTT = vm.addReportToProfile(
-                      updatedProfile.id,
-                      sttSummary,
-                    ) || updatedProfile;
-
-                    setEditData(updatedWithSTT);
-                    onUpdate(updatedWithSTT);
-                  }
-                } catch (e) {
-                  console.warn('Failed to generate STT report', e);
+                if (!sttReport || !sttReport.id) {
+                  return; // don’t try to use id when STT failed
                 }
+                const realId = sttReport.reportId || sttReport.id;
+                if (!realId) {
+                  console.warn('No realId from STT, skipping summary');
+                  return;
+                }
+
+                const sttSummary = {
+                  id: `stt-${realId}-${Date.now()}`,
+                  sttReportId: realId,
+                  title: sttReport.title || snapshot.title,
+                  type: 'Drawing+STT',
+                  date: snapshot.date,
+                  time: snapshot.time,
+                  preview: sttReport.transcription?.fullText?.slice(0, 80) || '',
+                };
+
+                const updatedWithSTT = {
+                  ...updatedProfile,
+                  reports: [...(updatedProfile.reports || []), sttSummary],
+                };
+
+                setEditData(updatedWithSTT);
+                onUpdate(updatedWithSTT);
+
+
+              } catch (e) {
+                console.warn('Failed to generate STT report', e);
+              }
               },
             }),
         },
@@ -269,16 +278,23 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
               </TouchableOpacity>
             </View>
 
+            {console.log('REPORTS FOR PROFILE', editData.id, editData.reports)}
+
             <View style={styles.reportsList}>
               {editData?.reports && editData.reports.length > 0 ? (
                 editData.reports.map((report) => (
-                  <ReportListItem
+                 <ReportListItem
                     key={report.id}
                     report={report}
                     onPress={(r) => {
+                      if (!r) return;
+
                       if (r.type === 'Drawing+STT') {
+                        const targetId = r.sttReportId || r.id;
+                        if (!targetId) return;
+
                         navigation.navigate('STTReportDetail', {
-                          sttReportId: r.id,        // ID of the STT report stored in AsyncStorage
+                          reportId: targetId,
                         });
                       } else {
                         navigation.navigate('ReportDetail', {

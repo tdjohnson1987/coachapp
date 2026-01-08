@@ -20,25 +20,44 @@ const STTReportDetailView = ({ navigation, route }) => {
 
   const [report, setReport] = useState(null);
 
-  useEffect(() => {
-    const load = async () => {
+useEffect(() => {
+  const load = async () => {
+    console.log('STT DETAIL reportId', reportId);
+    try {
       const r = await analysisVM.loadSTTReport(reportId);
-      setReport(r);
+      console.log('STT DETAIL loaded report', r);
+      if (!r) {
+        console.warn('No STT report found for id', reportId);
+      }
+      setReport(r || null);
       if (r?.drawing) {
         captureVM.loadSavedReport(r.drawing);
       }
-    };
-    load();
-    return () => captureVM.resetVM();
-  }, [reportId]);
+    } catch (e) {
+      console.warn('loadSTTReport failed', e);
+      setReport(null);
+    }
+  };
+  load();
+  return () => captureVM.resetVM();
+}, [reportId]);
 
-  if (!report) {
-    return (
-      <View style={styles.container}>
-        <Text style={{ padding: 20 }}>Loading...</Text>
+
+if (!report) {
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={24} color="#007AFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Analysis</Text>
+        <View style={{ width: 24 }} />
       </View>
-    );
-  }
+      <Text style={{ padding: 20 }}>No STT report found.</Text>
+    </View>
+  );
+}
+
 
   const created = report.createdAtIso
     ? new Date(report.createdAtIso).toLocaleString()
@@ -65,7 +84,7 @@ const STTReportDetailView = ({ navigation, route }) => {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Transcription</Text>
           <Text style={styles.transcription}>
-            {report.transcription.fullText}
+            {report.transcription?.fullText || ''}
           </Text>
         </View>
       </ScrollView>

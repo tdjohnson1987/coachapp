@@ -8,7 +8,7 @@ import tempfile
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-model_id = "openai/whisper-large-v3"
+model_id = "openai/whisper-small"
 
 print("Loading Whisper model...")
 model = AutoModelForSpeechSeq2Seq.from_pretrained(
@@ -89,7 +89,10 @@ if __name__ == "__main__":
 
 # # Activate the venv
 # source .venv/bin/activate
-# python3 src/api/whisper_server.py
 
+# # Install dependencies
 # pip install --upgrade pip
 # pip install "fastapi[standard]" uvicorn "transformers[torch]" "datasets[audio]" accelerate
+
+# # Run the server
+# python3 src/api/whisper_server.py
