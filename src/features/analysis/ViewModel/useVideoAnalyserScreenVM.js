@@ -236,6 +236,9 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
 
             playbackMetaRef.current = { events: meta, idx: 0 };
 
+            try {
+                await videoRef.current?.setVolumeAsync?.(0.1);
+            } catch { }
 
             await videoRef.current?.playAsync?.();
             setIsPlaying(true);
@@ -252,6 +255,11 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         stopPlaybackTimer();
         setPlaybackArmed(false);
         setIsPlaying(false);
+
+        try {
+            await videoRef.current?.setVolumeAsync?.(1.0);
+        } catch { }
+
 
         try {
             await videoRef.current?.pauseAsync?.();
