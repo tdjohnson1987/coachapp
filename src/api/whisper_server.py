@@ -90,3 +90,6 @@ if __name__ == "__main__":
 # # Activate the venv
 # source .venv/bin/activate
 # python3 src/api/whisper_server.py
+
+# pip install --upgrade pip
+# pip install "fastapi[standard]" uvicorn "transformers[torch]" "datasets[audio]" accelerate
