@@ -7,7 +7,6 @@ import {
   FlatList,
   Platform,
   Alert,
-  ScrollView,
 } from "react-native";
 import { Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
@@ -93,7 +92,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           text: "Save",
           onPress: async (title) => {
             const finalTitle = title || "Untitled Video Analysis";
-            
+
             // Create the snapshot object for the profile
             const analysisSnapshot = {
               id: Date.now().toString(),
@@ -101,7 +100,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               type: "Video Drawing Analysis",
               date: new Date().toLocaleDateString(),
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              
+
               videoUri: videoFile.uri,
               videoMeta: videoMeta,
               recordedEvents: [...(videoDrawing.recordedEvents || [])],
@@ -112,7 +111,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
             const onSave = route?.params?.onSaveAnalysis;
             if (onSave) {
               onSave(returnProfile.id, analysisSnapshot);
-              
+
               await videoDrawing.clearAll?.();
               navigation.navigate("Profile", { profile: returnProfile });
             }
@@ -145,233 +144,227 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         <View style={{ width: 32 }} />
       </View>
 
-      {/* Replace your previous Content section with this */}
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        contentContainerStyle={{ paddingBottom: 40 }} // Extra padding at bottom for better feel
-      >
-        <View style={styles.content}>
-          {returnProfile && (
-            <Text style={{ marginBottom: 8, color: "#6C757D" }}>
-              Analyzing: {returnProfile.name}
-            </Text>
-          )}
+      <View style={styles.content}>
+        {returnProfile && (
+          <Text style={{ marginBottom: 8, color: "#6C757D" }}>
+            Analyzing: {returnProfile.name}
+          </Text>
+        )}
 
-          {/* Video card */}
-          <View style={styles.card}>
-            <Text style={styles.label}>Video Source</Text>
+        {/* Video card */}
+        <View style={styles.card}>
+          <Text style={styles.label}>Video Source</Text>
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={screen.handlePickVideo}
+          >
+            <Text style={styles.primaryButtonText}>
+              {videoMeta ? "Change video" : "Select video"}
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.helperText}>
+            {videoMeta ? videoMeta.name : "No video selected yet"}
+          </Text>
+
+          <View
+            style={styles.videoWrapper}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              screen.setCanvasSize({ w: width || 1, h: height || 1 });
+            }}
+          >
+            {videoFile ? (
+              <>
+                {Platform.OS === "web" ? (
+                  <View style={{ flex: 1 }}>
+                    <video
+                      src={videoFile.uri}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                      controls
+                      autoPlay={screen.isPlaying}
+                    />
+                  </View>
+                ) : (
+                  <Video
+                    key={`${screen.videoKey}-${videoFile?.uri ?? ""}`}
+                    ref={screen.videoRef}
+                    source={{ uri: videoFile.uri }}
+                    style={styles.video}
+                    resizeMode="contain"
+                    shouldPlay={screen.isPlaying}
+                    useNativeControls={false}
+                    onPlaybackStatusUpdate={screen.onPlaybackStatusUpdate}
+                  />
+                )}
+
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <DrawingCanvas
+                    strokes={screen.strokesForCanvas}
+                    width={screen.canvasSize.w}
+                    height={screen.canvasSize.h}
+                  />
+                </View>
+              </>
+            ) : (
+              <View style={styles.videoPlaceholder}>
+                <Ionicons name="videocam-outline" size={40} color="#ADB5BD" />
+                <Text style={styles.placeholderText}>
+                  Select a video to start analyzing
+                </Text>
+              </View>
+            )}
+
+            {/* Touch-layer for drawing */}
+            {!!videoFile && !!drawApi?.panHandlers && (
+              <View
+                style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
+                pointerEvents="auto"
+                {...drawApi.panHandlers}
+              />
+            )}
+          </View>
+
+          <View style={styles.inlineRow}>
+            <Text style={styles.metaText}>
+              {videoMeta ? `${Math.round(videoMeta.size / 1024 / 1024)} MB` : ""}
+            </Text>
 
             <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={screen.handlePickVideo}
+              onPress={drawApi?.clear}
+              disabled={!videoFile || !drawApi}
             >
-              <Text style={styles.primaryButtonText}>
-                {videoMeta ? "Change video" : "Select video"}
+              <Text
+                style={[
+                  styles.clearText,
+                  (!videoFile || !drawApi) && styles.clearTextDisabled,
+                ]}
+              >
+                Clear drawing
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Controls */}
+          <View style={styles.controlsRow}>
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                { backgroundColor: videoDrawing.isRecording ? "#DC3545" : "#34C759" },
+                !videoFile && styles.controlBtnDisabled,
+              ]}
+              disabled={!videoFile}
+              onPress={screen.toggleRecording}
+            >
+              <Text style={styles.controlBtnText}>
+                {videoDrawing.isRecording ? "STOP REC" : "REC"}
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.helperText}>
-              {videoMeta ? videoMeta.name : "No video selected yet"}
-            </Text>
-
-            <View
-              style={styles.videoWrapper}
-              onLayout={(e) => {
-                const { width, height } = e.nativeEvent.layout;
-                screen.setCanvasSize({ w: width || 1, h: height || 1 });
-              }}
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                { backgroundColor: "#6F42C1" },
+                !clipReady && styles.controlBtnDisabled,
+              ]}
+              disabled={!clipReady}
+              onPress={screen.togglePlayback}
             >
-              {videoFile ? (
-                <>
-                  {Platform.OS === "web" ? (
-                    <View style={{ flex: 1 }}>
-                      <video
-                        src={videoFile.uri}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "contain",
-                          display: "block",
-                        }}
-                        controls
-                        autoPlay={screen.isPlaying}
-                      />
-                    </View>
-                  ) : (
-                    <Video
-                      key={`${screen.videoKey}-${videoFile?.uri ?? ""}`}
-                      ref={screen.videoRef}
-                      source={{ uri: videoFile.uri }}
-                      style={styles.video}
-                      resizeMode="contain"
-                      shouldPlay={screen.isPlaying}
-                      useNativeControls={false}
-                      onPlaybackStatusUpdate={screen.onPlaybackStatusUpdate}
-                    />
-                  )}
-
-                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                    <DrawingCanvas
-                      strokes={screen.strokesForCanvas}
-                      width={screen.canvasSize.w}
-                      height={screen.canvasSize.h}
-                    />
-                  </View>
-                </>
-              ) : (
-                <View style={styles.videoPlaceholder}>
-                  <Ionicons name="videocam-outline" size={40} color="#ADB5BD" />
-                  <Text style={styles.placeholderText}>
-                    Select a video to start analyzing
-                  </Text>
-                </View>
-              )}
-
-              {/* Touch-layer for drawing */}
-              {!!videoFile && !!drawApi?.panHandlers && (
-                <View
-                  style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
-                  pointerEvents="auto"
-                  {...drawApi.panHandlers}
-                />
-              )}
-            </View>
-
-            <View style={styles.inlineRow}>
-              <Text style={styles.metaText}>
-                {videoMeta ? `${Math.round(videoMeta.size / 1024 / 1024)} MB` : ""}
+              <Text style={styles.controlBtnText}>
+                {(screen.playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
               </Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={drawApi?.clear}
-                disabled={!videoFile || !drawApi}
-              >
-                <Text
-                  style={[
-                    styles.clearText,
-                    (!videoFile || !drawApi) && styles.clearTextDisabled,
-                  ]}
-                >
-                  Clear drawing
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                { backgroundColor: "#343A40" },
+                !videoFile && styles.controlBtnDisabled,
+              ]}
+              disabled={!videoFile}
+              onPress={screen.togglePlay}
+            >
+              <Text style={styles.controlBtnText}>
+                {screen.isPlaying ? "PAUSE" : "PLAY"}
+              </Text>
+            </TouchableOpacity>
 
-            {/* Controls */}
-            <View style={styles.controlsRow}>
-              <TouchableOpacity
-                style={[
-                  styles.controlBtn,
-                  { backgroundColor: videoDrawing.isRecording ? "#DC3545" : "#34C759" },
-                  !videoFile && styles.controlBtnDisabled,
-                ]}
-                disabled={!videoFile}
-                onPress={screen.toggleRecording}
-              >
-                <Text style={styles.controlBtnText}>
-                  {videoDrawing.isRecording ? "STOP REC" : "REC"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.controlBtn,
-                  { backgroundColor: "#6F42C1" },
-                  !clipReady && styles.controlBtnDisabled,
-                ]}
-                disabled={!clipReady}
-                onPress={screen.togglePlayback}
-              >
-                <Text style={styles.controlBtnText}>
-                  {(screen.playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.controlBtn,
-                  { backgroundColor: "#343A40" },
-                  !videoFile && styles.controlBtnDisabled,
-                ]}
-                disabled={!videoFile}
-                onPress={screen.togglePlay}
-              >
-                <Text style={styles.controlBtnText}>
-                  {screen.isPlaying ? "PAUSE" : "PLAY"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.controlBtn,
-                  { backgroundColor: "#0D6EFD" },
-                  !videoFile && styles.controlBtnDisabled,
-                ]}
-                disabled={!videoFile}
-                onPress={screen.handleReset}
-              >
-                <Text style={styles.controlBtnText}>RESET</Text>
-              </TouchableOpacity>
-            </View>
-
-            {drawApi && (
-              <DrawingToolbar
-                tool={drawApi.tool}
-                setTool={drawApi.setTool}
-                color={drawApi.color}
-                setColor={drawApi.setColor}
-                strokeWidth={drawApi.strokeWidth}
-                setStrokeWidth={drawApi.setStrokeWidth}
-                onUndo={drawApi.undo}
-              />
-            )}
-
-            {videoFile && videoDrawing.recordedEvents?.length > 0 && !videoDrawing.isRecording && (
-              <TouchableOpacity
-                style={[styles.primaryButton, { backgroundColor: "#5856D6", marginTop: 10 }]}
-                onPress={handleSaveAndExit}
-              >
-                <Ionicons name="cloud-upload" size={20} color="#FFF" style={{ marginRight: 8 }} />
-                <Text style={styles.primaryButtonText}>
-                  Save to {returnProfile?.name.split(" ")[0]}'s Profile
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                { backgroundColor: "#0D6EFD" },
+                !videoFile && styles.controlBtnDisabled,
+              ]}
+              disabled={!videoFile}
+              onPress={screen.handleReset}
+            >
+              <Text style={styles.controlBtnText}>RESET</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Key frames + status */}
-          <View style={styles.card}>
-            <Text style={styles.label}>Key Frames</Text>
+          {drawApi && (
+            <DrawingToolbar
+              tool={drawApi.tool}
+              setTool={drawApi.setTool}
+              color={drawApi.color}
+              setColor={drawApi.setColor}
+              strokeWidth={drawApi.strokeWidth}
+              setStrokeWidth={drawApi.setStrokeWidth}
+              onUndo={drawApi.undo}
+            />
+          )}
 
-            {frames.length === 0 ? (
-              <Text style={styles.helperText}>
-                No frames yet (will come from the analysis step).
+          {videoFile && videoDrawing.recordedEvents?.length > 0 && !videoDrawing.isRecording && (
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: "#5856D6", marginTop: 10 }]}
+              onPress={handleSaveAndExit}
+            >
+              <Ionicons name="cloud-upload" size={20} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={styles.primaryButtonText}>
+                Save to {returnProfile?.name.split(" ")[0]}'s Profile
               </Text>
-            ) : (
-              <FlatList
-                horizontal
-                data={frames}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={renderFrameItem}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 4 }}
-              />
-            )}
-
-            <View style={styles.divider} />
-
-            <Text style={styles.label}>Status</Text>
-            <Text style={styles.statusText}>
-              Transcription: {transcription ? "Completed" : "Not started"}
-            </Text>
-            <Text style={styles.statusText}>
-              Report: {report ? "Created" : "Not created"}
-            </Text>
-            {loading && <Text style={styles.statusText}>Processing...</Text>}
-            {error && <Text style={styles.errorText}>{String(error)}</Text>}
-          </View>
+            </TouchableOpacity>
+          )}
         </View>
-      </ScrollView>
+
+        {/* Key frames + status */}
+        <View style={styles.card}>
+          <Text style={styles.label}>Key Frames</Text>
+
+          {frames.length === 0 ? (
+            <Text style={styles.helperText}>
+              No frames yet (will come from the analysis step).
+            </Text>
+          ) : (
+            <FlatList
+              horizontal
+              data={frames}
+              keyExtractor={(item) => String(item.id)}
+              renderItem={renderFrameItem}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 4 }}
+            />
+          )}
+
+          <View style={styles.divider} />
+
+          <Text style={styles.label}>Status</Text>
+          <Text style={styles.statusText}>
+            Transcription: {transcription ? "Completed" : "Not started"}
+          </Text>
+          <Text style={styles.statusText}>
+            Report: {report ? "Created" : "Not created"}
+          </Text>
+          {loading && <Text style={styles.statusText}>Processing...</Text>}
+          {error && <Text style={styles.errorText}>{String(error)}</Text>}
+        </View>
+      </View>
     </View>
   );
 };

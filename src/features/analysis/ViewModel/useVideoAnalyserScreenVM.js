@@ -68,7 +68,7 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         }, 33);
     };
 
-    const playbackMetaRef = useRef({ events: [], idx: 0 }); //Här?
+    const playbackMetaRef = useRef({ events: [], idx: 0 });
 
     const {
         videoFile,
@@ -146,15 +146,22 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
             const st = await videoRef.current?.getStatusAsync?.();
             if (!st?.isLoaded) return;
 
+            const posMs = st.positionMillis ?? 0;
+
             if (isPlaying) {
                 await videoRef.current?.pauseAsync?.();
                 setIsPlaying(false);
+
+                if (videoDrawing.isRecording) {
+                    const t = videoDrawing.getTimelineNow?.() ?? 0;
+                    videoDrawing.pushMetaEvent?.({ type: "video-pause", t, posMs });
+                }
                 return;
             }
 
             const nearEnd =
                 typeof st.durationMillis === "number" &&
-                (st.didJustFinish || (st.positionMillis ?? 0) >= st.durationMillis - 200);
+                (st.didJustFinish || posMs >= st.durationMillis - 200);
 
             if (nearEnd) {
                 await videoRef.current?.setPositionAsync?.(0);
@@ -163,10 +170,18 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
 
             await videoRef.current?.playAsync?.();
             setIsPlaying(true);
+
+            if (videoDrawing.isRecording) {
+                const st2 = await videoRef.current?.getStatusAsync?.();
+                const pos2 = st2?.isLoaded ? (st2.positionMillis ?? 0) : posMs;
+                const t = videoDrawing.getTimelineNow?.() ?? 0;
+                videoDrawing.pushMetaEvent?.({ type: "video-play", t, posMs: pos2 });
+            }
         } catch (e) {
             console.warn("play/pause failed", e);
         }
     };
+
 
 
     const toggleRecording = async () => {
