@@ -109,35 +109,37 @@ const STTReportDetailView = ({ navigation, route, analysisVM, captureVM }) => {
         </Text>
 
         {report.drawing && captureVM && (
-          <View style={styles.canvasCard}>
+        <View style={styles.canvasCard}>
             <Text style={styles.sectionTitle}>Visual Analysis</Text>
             <View
-              style={styles.pitchWrapper}
-              onLayout={(e) => {
+            style={styles.pitchWrapper}
+            onLayout={(e) => {
                 const { width, height } = e.nativeEvent.layout;
                 if (captureVM.setCanvasSize) {
-                  captureVM.setCanvasSize({ w: width, h: height });
+                captureVM.setCanvasSize({ w: width, h: height });
                 }
-              }}
+            }}
             >
-              {report.drawing.activeImageSource && (
+            {report.drawing.activeImageSource && (
                 <Image
-                  source={report.drawing.activeImageSource}
-                  style={styles.bgImage}
-                  resizeMode="cover"
+                source={report.drawing.activeImageSource}
+                style={styles.bgImage}
+                resizeMode="cover"
                 />
-              )}
+            )}
 
-              {(captureVM?.canvasSize?.w ?? 0) > 1 && (
+            {(captureVM?.canvasSize?.w ?? 0) > 1 && (
                 <AnalysisCanvas
-                  allToRender={captureVM.allToRender || []}
-                  canvasSize={captureVM.canvasSize}
-                  getArrowHead={captureVM.getArrowHead}
+                allToRender={captureVM.allToRender || []}
+                // use the ORIGINAL drawing canvas size for viewBox
+                canvasSize={report.drawing.canvasSize}
+                getArrowHead={captureVM.getArrowHead}
                 />
-              )}
+            )}
             </View>
-          </View>
+        </View>
         )}
+
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Transcription</Text>
