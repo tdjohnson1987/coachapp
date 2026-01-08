@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   Platform,
+  ScrollView,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Video } from "expo-av";
@@ -262,249 +263,249 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
-        {returnProfile && (
-          <Text style={{ marginBottom: 8, color: "#6C757D" }}>
-            Analyserar: {returnProfile.name}
-          </Text>
-        )}
-
-        {/* Video card */}
-        <View style={styles.card}>
-          <Text style={styles.label}>Videokälla</Text>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handlePickVideo}
-          >
-            <Text style={styles.primaryButtonText}>
-              {videoMeta ? "Byt video" : "Välj video"}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          {returnProfile && (
+            <Text style={{ marginBottom: 8, color: "#6C757D" }}>
+              Analyzing: {returnProfile.name}
             </Text>
-          </TouchableOpacity>
-          <Text style={styles.helperText}>
-            {videoMeta ? videoMeta.name : "Ingen video vald ännu"}
-          </Text>
+          )}
 
-          <View
-            style={styles.videoWrapper}
-            onLayout={(e) => {
-              const { width, height } = e.nativeEvent.layout;
-              setCanvasSize({ w: width || 1, h: height || 1 });
-            }}
-          >
-            {videoFile ? (
-              <>
-                {Platform.OS === "web" ? (
-                  <View style={{ flex: 1 }}>
-                    <video
-                      src={videoFile.uri}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "contain",
-                        display: "block",
+          {/* Video card */}
+          <View style={styles.card}>
+            <Text style={styles.label}>Video Source</Text>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handlePickVideo}
+            >
+              <Text style={styles.primaryButtonText}>
+                {videoMeta ? "Change Video" : "Select Video"}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.helperText}>
+              {videoMeta ? videoMeta.name : "No video selected yet"}
+            </Text>
+
+            <View
+              style={styles.videoWrapper}
+              onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+                setCanvasSize({ w: width || 1, h: height || 1 });
+              }}
+            >
+              {videoFile ? (
+                <>
+                  {Platform.OS === "web" ? (
+                    <View style={{ flex: 1 }}>
+                      <video
+                        src={videoFile.uri}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "contain",
+                          display: "block",
+                        }}
+                        controls
+                        autoPlay={isPlaying}
+                      />
+                    </View>
+                  ) : (
+                    <Video
+                      key={`${videoKey}-${videoFile?.uri ?? ""}`}
+                      ref={videoRef}
+                      source={{ uri: videoFile.uri }}
+                      style={styles.video}
+                      resizeMode="contain"
+                      shouldPlay={isPlaying}
+                      useNativeControls={false}
+                      onPlaybackStatusUpdate={async (status) => {
+                        if (!status?.isLoaded) return;
+
+                        const pos = status.positionMillis ?? 0;
+
+                        // Important: update time for timed replay
+                        videoDrawing.setVideoTimeMs?.(pos);
+
+                        // Stop playback at endMs
+                        const r = videoDrawing.getClipRange?.();
+                        const endMs = r?.endMs;
+
+                        if ((playbackArmed || videoDrawing.isPlayback) && typeof endMs === "number" && pos >= endMs) {
+                          setPlaybackArmed(false);
+                          try { await videoRef.current?.pauseAsync?.(); } catch { }
+                          setIsPlaying(false);
+                          await videoDrawing.stopPlayback?.();
+                          return;
+                        }
+
+                        if (status.didJustFinish) {
+                          setPlaybackArmed(false);
+                          setIsPlaying(false);
+                          await videoDrawing.stopPlayback?.();
+                        }
                       }}
-                      controls
-                      autoPlay={isPlaying}
+                    />
+                  )}
+
+                  {/* Drawing overlay */}
+                  <View
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                  >
+                    <DrawingCanvas
+                      strokes={strokesForCanvas}
+                      width={canvasSize.w}
+                      height={canvasSize.h}
                     />
                   </View>
-                ) : (
-                  <Video
-                    key={`${videoKey}-${videoFile?.uri ?? ""}`}
-                    ref={videoRef}
-                    source={{ uri: videoFile.uri }}
-                    style={styles.video}
-                    resizeMode="contain"
-                    shouldPlay={isPlaying}
-                    useNativeControls={false}
-                    onPlaybackStatusUpdate={async (status) => {
-                      if (!status?.isLoaded) return;
-
-                      const pos = status.positionMillis ?? 0;
-
-                      // viktigt: uppdatera tiden för timed replay
-                      videoDrawing.setVideoTimeMs?.(pos);
-
-                      // stoppa playback vid endMs
-                      const r = videoDrawing.getClipRange?.();
-                      const endMs = r?.endMs;
-
-                      if ((playbackArmed || videoDrawing.isPlayback) && typeof endMs === "number" && pos >= endMs) {
-                        setPlaybackArmed(false);
-                        try { await videoRef.current?.pauseAsync?.(); } catch { }
-                        setIsPlaying(false);
-                        await videoDrawing.stopPlayback?.();
-                        return;
-                      }
-
-                      if (status.didJustFinish) {
-                        setPlaybackArmed(false);
-                        setIsPlaying(false);
-                        await videoDrawing.stopPlayback?.();
-                      }
-                    }}
+                </>
+              ) : (
+                <View style={styles.videoPlaceholder}>
+                  <Ionicons
+                    name="videocam-outline"
+                    size={40}
+                    color="#ADB5BD"
                   />
-                )}
-
-                {/* Drawing overlay */}
-                <View
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                >
-                  <DrawingCanvas
-                    strokes={strokesForCanvas}
-                    width={canvasSize.w}
-                    height={canvasSize.h}
-                  />
+                  <Text style={styles.placeholderText}>
+                    Select a video to start analyzing
+                  </Text>
                 </View>
+              )}
 
-
-              </>
-            ) : (
-              <View style={styles.videoPlaceholder}>
-                <Ionicons
-                  name="videocam-outline"
-                  size={40}
-                  color="#ADB5BD"
+              {/* Touch-layer for drawing (always active when video exists) */}
+              {!!videoFile && !!drawApi?.panHandlers && (
+                <View
+                  style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
+                  pointerEvents="auto"
+                  {...drawApi.panHandlers}
                 />
-                <Text style={styles.placeholderText}>
-                  Välj en video för att börja analysera
-                </Text>
-              </View>
-            )}
+              )}
+            </View>
 
-            {/* Touch-layer för ritning (alltid på när video finns) */}
-            {!!videoFile && !!drawApi?.panHandlers && (
-              <View
-                style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
-                pointerEvents="auto"
-                {...drawApi.panHandlers}
+            {/* Meta + clear */}
+            <View style={styles.inlineRow}>
+              <Text style={styles.metaText}>
+                {videoMeta
+                  ? `${Math.round(videoMeta.size / 1024 / 1024)} MB`
+                  : ""}
+              </Text>
+
+              <TouchableOpacity onPress={drawApi?.clear} disabled={!videoFile || !drawApi}>
+                <Text style={[styles.clearText, (!videoFile || !drawApi) && styles.clearTextDisabled]}>
+                  Clear Drawing
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Controls: REC + PLAYBACK + PLAY + RESET */}
+            <View style={styles.controlsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.controlBtn,
+                  {
+                    backgroundColor: videoDrawing.isRecording
+                      ? "#DC3545"
+                      : "#34C759",
+                  },
+                  !videoFile && styles.controlBtnDisabled,
+                ]}
+                disabled={!videoFile}
+                onPress={toggleRecording}
+              >
+                <Text style={styles.controlBtnText}>
+                  {videoDrawing.isRecording ? "STOP REC" : "REC"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.controlBtn,
+                  { backgroundColor: "#6F42C1" },
+                  !clipReady && styles.controlBtnDisabled,
+                ]}
+                disabled={!clipReady}
+                onPress={togglePlayback}
+              >
+                <Text style={styles.controlBtnText}>
+                  {(playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.controlBtn,
+                  { backgroundColor: "#343A40" },
+                  !videoFile && styles.controlBtnDisabled,
+                ]}
+                disabled={!videoFile}
+                onPress={togglePlay}
+              >
+                <Text style={styles.controlBtnText}>{isPlaying ? "PAUSE" : "PLAY"}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.controlBtn,
+                  { backgroundColor: "#0D6EFD" },
+                  !videoFile && styles.controlBtnDisabled,
+                ]}
+                disabled={!videoFile}
+                onPress={handleReset}
+              >
+                <Text style={styles.controlBtnText}>RESET</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Toolbar */}
+            {drawApi && (
+              <DrawingToolbar
+                tool={drawApi.tool}
+                setTool={drawApi.setTool}
+                color={drawApi.color}
+                setColor={drawApi.setColor}
+                strokeWidth={drawApi.strokeWidth}
+                setStrokeWidth={drawApi.setStrokeWidth}
+                onUndo={drawApi.undo}
               />
             )}
           </View>
 
-          {/* Meta + clear */}
-          <View style={styles.inlineRow}>
-            <Text style={styles.metaText}>
-              {videoMeta
-                ? `${Math.round(videoMeta.size / 1024 / 1024)} MB`
-                : ""}
+          {/* Key frames + status */}
+          <View style={styles.card}>
+            <Text style={styles.label}>Key Frames</Text>
+            {frames.length === 0 ? (
+              <Text style={styles.helperText}>
+                No frames yet (generated from the analysis step).
+              </Text>
+            ) : (
+              <FlatList
+                horizontal
+                data={frames}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={renderFrameItem}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 4 }}
+              />
+            )}
+
+            <View style={styles.divider} />
+
+            <Text style={styles.label}>Status</Text>
+            <Text style={styles.statusText}>
+              Transcription: {transcription ? "Completed" : "Not started"}
             </Text>
-
-            <TouchableOpacity onPress={drawApi?.clear} disabled={!videoFile || !drawApi}>
-              <Text style={[styles.clearText, (!videoFile || !drawApi) && styles.clearTextDisabled]}>
-                Rensa ritning
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Controls: REC + PLAYBACK + PLAY + RESET */}
-          <View style={styles.controlsRow}>
-            <TouchableOpacity
-              style={[
-                styles.controlBtn,
-                {
-                  backgroundColor: videoDrawing.isRecording
-                    ? "#DC3545"
-                    : "#34C759",
-                },
-                !videoFile && styles.controlBtnDisabled,
-              ]}
-              disabled={!videoFile}
-              onPress={toggleRecording}
-            >
-              <Text style={styles.controlBtnText}>
-                {videoDrawing.isRecording ? "STOP REC" : "REC"}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.controlBtn,
-                { backgroundColor: "#6F42C1" },
-                !clipReady && styles.controlBtnDisabled,
-              ]}
-              disabled={!clipReady}
-              onPress={togglePlayback}
-            >
-              <Text style={styles.controlBtnText}>
-                {(playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.controlBtn,
-                { backgroundColor: "#343A40" },
-                !videoFile && styles.controlBtnDisabled,
-              ]}
-              disabled={!videoFile}
-              onPress={togglePlay}
-            >
-              <Text style={styles.controlBtnText}>{isPlaying ? "PAUSE" : "PLAY"}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.controlBtn,
-                { backgroundColor: "#0D6EFD" },
-                !videoFile && styles.controlBtnDisabled,
-              ]}
-              disabled={!videoFile}
-              onPress={handleReset}
-            >
-              <Text style={styles.controlBtnText}>RESET</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Toolbar */}
-          {drawApi && (
-            <DrawingToolbar
-              tool={drawApi.tool}
-              setTool={drawApi.setTool}
-              color={drawApi.color}
-              setColor={drawApi.setColor}
-              strokeWidth={drawApi.strokeWidth}
-              setStrokeWidth={drawApi.setStrokeWidth}
-              onUndo={drawApi.undo}
-            />
-          )}
-        </View>
-
-        {/* Key frames + status */}
-        <View style={styles.card}>
-          <Text style={styles.label}>Nyckelframes</Text>
-          {frames.length === 0 ? (
-            <Text style={styles.helperText}>
-              Inga frames ännu (kommer från analys-steget).
+            <Text style={styles.statusText}>
+              Report: {report ? "Generated" : "Not generated"}
             </Text>
-          ) : (
-            <FlatList
-              horizontal
-              data={frames}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={renderFrameItem}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 4 }}
-            />
-          )}
-
-          <View style={styles.divider} />
-
-          <Text style={styles.label}>Status</Text>
-          <Text style={styles.statusText}>
-            Transkription: {transcription ? "Klar" : "Ej påbörjad"}
-          </Text>
-          <Text style={styles.statusText}>
-            Rapport: {report ? "Skapad" : "Ej skapad"}
-          </Text>
-          {loading && (
-            <Text style={styles.statusText}>Bearbetar...</Text>
-          )}
-          {error && (
-            <Text style={styles.errorText}>{String(error)}</Text>
-          )}
+            {loading && (
+              <Text style={styles.statusText}>Processing...</Text>
+            )}
+            {error && (
+              <Text style={styles.errorText}>{String(error)}</Text>
+            )}
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
