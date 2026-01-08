@@ -119,7 +119,8 @@ export default function App() {
   
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // Simple navigation helper
+    // Simple navigation helper
+  // UPDATE THIS IN App.js
   const navigate = (screen, params) => {
     if (params?.profile) {
       setSelectedProfile(params.profile);
@@ -127,15 +128,19 @@ export default function App() {
     if (params?.playbackReport) {
       setSelectedReport(params.playbackReport);
     }
-    if (params?.sttReportId) {
-      setSelectedSttReportId(params.sttReportId);
+    
+    // FIX: Look for any variation of the ID key
+    const incomingId = params?.sttReportId || params?.reportId || params?.id;
+    if (incomingId) {
+      setSelectedSttReportId(incomingId);
     }
+
     if (screen === 'Capture') {
-        setCaptureRouteParams(params || {}); // store raw params (returnToProfile, onSaveAnalysis, ...)
+      setCaptureRouteParams(params || {});
     }
+    
     setCurrentScreen(screen);
   };
-
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -212,12 +217,16 @@ export default function App() {
         />
       )}
     
-    {currentScreen === 'STTReportDetail' && selectedSttReportId && (
+      {currentScreen === 'STTReportDetail' && (
         <STTReportDetailView
+          // Pass the VMs created at the top of App.js as PROPS
+          analysisVM={analysisVM}
+          captureVM={captureVM}
           navigation={{
             goBack: () => setCurrentScreen('Profile'),
             navigate,
           }}
+          // Pass the ID explicitly
           route={{ params: { reportId: selectedSttReportId } }}
         />
       )}
