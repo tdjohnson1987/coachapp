@@ -1,3 +1,4 @@
+// src/features/profile/View/ProfileView.jsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -11,18 +12,31 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+
 import ReportListItem from './ReportListItem';
 import { useProfileVM } from '../ViewModel/useProfileVM';
+import { useAnalysisVM } from '../../analysis/ViewModel/useAnalysisVM';
+import { useAuth } from '../../../context/AuthContext';
 
-const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
+const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
   const { profile, onUpdate } = route.params;
+
   const vm = useProfileVM();
+  const analysisVM = useAnalysisVM();
+  const { user } = useAuth();
+  const coachId = user?.id;
+
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(profile || {});
 
   useEffect(() => {
     setEditData(profile || {});
   }, [profile]);
+
+  useEffect(() => {
+    if (!editData?.id || !coachId) return;
+    analysisVM.useProfileForAnalysis(coachId, editData.id);
+  }, [analysisVM, coachId, editData?.id]);
 
   const handleOpenReports = () => {
     navigation.navigate('ReportGenerator', { profile: editData });
@@ -31,48 +45,116 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
   const handlePickImage = async () => {
     const uri = await vm.pickImage();
     if (uri) {
-      setEditData({ ...editData, image: uri }); // Ändrat från setFormData/formData
+      setEditData({ ...editData, image: uri });
     }
   };
+
   const handleSave = () => {
     onUpdate(editData);
     setIsEditing(false);
   };
 
   const handleDeleteReport = (reportId) => {
-      Alert.alert("Delete", "Are you sure?", [
-          { text: "No" },
-          { text: "Yes", onPress: () => {
-              const updated = vm.deleteReport(editData, reportId);
-              setEditData(updated);
-              onUpdate(updated);
-          }}
-      ]);
+    Alert.alert('Delete', 'Are you sure?', [
+      { text: 'No' },
+      {
+        text: 'Yes',
+        onPress: () => {
+          const updated = vm.deleteReport(editData, reportId);
+          setEditData(updated);
+          onUpdate(updated);
+        },
+      },
+    ]);
   };
+
   const handleDeleteProfile = () => {
     Alert.alert(
-      "Delete Profile",
-      "Are you sure you want to delete this profile?",
+      'Delete Profile',
+      'Are you sure you want to delete this profile?',
       [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive", 
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
           onPress: async () => {
-            // 1. Ask VM to calculate the new list
-            // We pass the 'profiles' prop here
             const updatedList = await vm.deleteProfile(editData.id, profiles);
-            
             if (updatedList) {
-              // 2. Update the state in App.js so the list screen refreshes
               setProfiles(updatedList);
-              
-              // 3. Go back to the list
               navigation.goBack();
             }
-          } 
-        }
-      ]
+          },
+        },
+      ],
+    );
+  };
+
+  const handleCreateAnalysis = () => {
+    Alert.alert(
+      'New Analysis',
+      'Would you like to use a picture or a video?',
+      [
+        {
+          text: 'Picture',
+          onPress: () =>
+            navigation.navigate('Capture', {
+              returnToProfile: editData,
+              onSaveAnalysis: async (profileId, snapshot) => {
+                // 1) Attach snapshot to profile (local profile reports)
+                const updatedProfile = vm.addReportToProfile
+                  ? vm.addReportToProfile(profileId, snapshot)
+                  : {
+                      ...editData,
+                      reports: [...(editData.reports || []), snapshot],
+                    };
+
+                setEditData(updatedProfile);
+                onUpdate(updatedProfile);
+
+                // 2) Generate STT report
+                try {
+                  const sttReport = await analysisVM.generateSTTFromSnapshot({
+                    profile: updatedProfile,
+                    snapshot,
+                  });
+                  if (sttReport) {
+                // 3) Add a lightweight STT entry pointing to the full STT report
+                  const sttSummary = {
+                      id: sttReport.reportId,                  // used for navigation
+                      title: sttReport.title || snapshot.title,
+                      type: 'Drawing+STT',
+                      date: snapshot.date,
+                      time: snapshot.time,
+                      // optional: short preview text
+                      preview: sttReport.transcription.fullText.slice(0, 80),
+                    };
+
+                  const updatedWithSTT = vm.addReportToProfile(
+                      updatedProfile.id,
+                      sttSummary,
+                    ) || updatedProfile;
+
+                    setEditData(updatedWithSTT);
+                    onUpdate(updatedWithSTT);
+                  }
+                } catch (e) {
+                  console.warn('Failed to generate STT report', e);
+                }
+              },
+            }),
+        },
+        {
+          text: 'Video',
+          onPress: () =>
+            navigation.navigate('VideoAnalysis', {
+              returnToProfile: editData,
+            }),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
     );
   };
 
@@ -91,25 +173,18 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profilsektion */}
+        {/* Profile section */}
         <View style={styles.profileSection}>
           <TouchableOpacity
-            onPress={isEditing ? handlePickImage: null}
+            onPress={isEditing ? handlePickImage : null}
             activeOpacity={isEditing ? 0.7 : 1}
             style={styles.imageWrapper}
           >
             {editData?.image ? (
-              <Image
-                source={{ uri: editData.image }}
-                style={styles.avatar}
-              />
+              <Image source={{ uri: editData.image }} style={styles.avatar} />
             ) : (
               <View style={styles.placeholderAvatar}>
-                <Ionicons
-                  name="person-circle"
-                  size={100}
-                  color="#ADB5BD"
-                />
+                <Ionicons name="person-circle" size={100} color="#ADB5BD" />
               </View>
             )}
             {isEditing && (
@@ -133,9 +208,7 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
                 style={styles.editToggleBtn}
                 onPress={() => setIsEditing(true)}
               >
-                <Text style={styles.editToggleBtnText}>
-                  Change information
-                </Text>
+                <Text style={styles.editToggleBtnText}>Change information</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -143,16 +216,14 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
           )}
         </View>
 
-        {/* Redigeringsläge */}
+        {/* Edit mode */}
         {isEditing && (
           <View style={styles.form}>
             <Text style={styles.label}>Name</Text>
             <TextInput
               style={styles.input}
               value={editData?.name || ''}
-              onChangeText={(t) =>
-                setEditData({ ...editData, name: t })
-              }
+              onChangeText={(t) => setEditData({ ...editData, name: t })}
             />
 
             <Text style={styles.label}>Age</Text>
@@ -160,52 +231,21 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
               style={styles.input}
               keyboardType="numeric"
               value={editData?.age || ''}
-              onChangeText={(t) =>
-                setEditData({ ...editData, age: t })
-              }
+              onChangeText={(t) => setEditData({ ...editData, age: t })}
             />
-            <TouchableOpacity
-              style={styles.fullSaveBtn}
-              onPress={handleSave}
-            >
-              <Text style={styles.fullSaveBtnText}>
-                Save changes
-              </Text>
+
+            <TouchableOpacity style={styles.fullSaveBtn} onPress={handleSave}>
+              <Text style={styles.fullSaveBtnText}>Save changes</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Åtgärdssektion */}
+        {/* Actions */}
         {!isEditing && (
           <View style={styles.actionSection}>
             <TouchableOpacity
               style={styles.createBtn}
-              onPress={() => {
-                Alert.alert(
-                  'New Analysis',
-                  'Would you like to use a picture or a video?',
-                  [
-                    {
-                      text: 'Picture',
-                      onPress: () =>
-                        navigation.navigate('Capture', {
-                          returnToProfile: editData,
-                        }),
-                    },
-                    {
-                      text: 'Video',
-                      onPress: () =>
-                        navigation.navigate('VideoAnalysis', {
-                          returnToProfile: editData,
-                        }),
-                    },
-                    {
-                      text: 'Cancel',
-                      style: 'cancel',
-                    },
-                  ],
-                );
-              }}
+              onPress={handleCreateAnalysis}
             >
               <Ionicons name="add-circle" size={24} color="#FFF" />
               <Text style={styles.createBtnText}>Create new analysis</Text>
@@ -213,7 +253,21 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
 
             <View style={styles.divider} />
 
-            <Text style={styles.sectionHeader}>Previous Videos/Reports</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 15,
+              }}
+            >
+              <Text style={styles.sectionHeader}>Previous Videos/Reports</Text>
+              <TouchableOpacity onPress={handleOpenReports}>
+                <Text style={{ color: '#007AFF', fontWeight: '600' }}>
+                  View all
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.reportsList}>
               {editData?.reports && editData.reports.length > 0 ? (
@@ -221,11 +275,17 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
                   <ReportListItem
                     key={report.id}
                     report={report}
-                    onPress={(r) =>
-                      navigation.navigate('ReportDetail', {
-                        playbackReport: r,
-                      })
-                    }
+                    onPress={(r) => {
+                      if (r.type === 'Drawing+STT') {
+                        navigation.navigate('STTReportDetail', {
+                          sttReportId: r.id,        // ID of the STT report stored in AsyncStorage
+                        });
+                      } else {
+                        navigation.navigate('ReportDetail', {
+                          playbackReport: r,
+                        });
+                      }
+                    }}
                     onLongPress={handleDeleteReport}
                   />
                 ))
@@ -236,19 +296,20 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) =>{
                     size={40}
                     color="#E9ECEF"
                   />
-                  <Text style={styles.emptyStateText}>
-                    No analysis saved.
-                  </Text>
+                  <Text style={styles.emptyStateText}>No analysis saved.</Text>
                 </View>
               )}
             </View>
           </View>
         )}
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={{ marginTop: 40, marginBottom: 20, alignItems: 'center' }}
           onPress={handleDeleteProfile}
         >
-          <Text style={{ color: '#FF3B30', fontWeight: '600' }}>Delete Profile</Text>
+          <Text style={{ color: '#FF3B30', fontWeight: '600' }}>
+            Delete Profile
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -368,7 +429,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#1A1A1A',
-    marginBottom: 15,
   },
   reportsList: { paddingBottom: 40 },
 

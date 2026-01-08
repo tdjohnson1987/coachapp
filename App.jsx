@@ -13,6 +13,8 @@ import { useAnalysisVM } from './src/features/analysis/ViewModel/useAnalysisVM';
 import CaptureScreen from './src/features/capture/View/CaptureScreen';
 import useCaptureVM from './src/features/capture/ViewModel/useCaptureVM';
 import ReportDetailView from './src/features/userProfiles/View/ReportDetailView';
+import { AuthProvider } from './src/context/AuthContext';
+import STTReportDetailView from './src/features/analysis/View/STTReportDetailView';
 
 
 export default function App() {
@@ -20,12 +22,35 @@ export default function App() {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [selectedSttReportId, setSelectedSttReportId] = useState(null); // NEW
+  const [captureRouteParams, setCaptureRouteParams] = useState(null);
+
+
   
   const goBack = () => {
     // simplest: always go back to Home (or Profile, if you prefer)
     setCurrentScreen('Home');
     setCurrentParams(null);
   };
+
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@coachapp_current_user');
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+          return;
+        }
+        const newUser = { id: `coach-${Date.now()}` };
+        setCurrentUser(newUser);
+        await AsyncStorage.setItem('@coachapp_current_user', JSON.stringify(newUser));
+      } catch (e) {
+        console.error('Kunde inte ladda användare', e);
+      }
+    };
+    loadCurrentUser();
+  }, []);
 
   // create analysis VM ONCE per app render, not inside JSX
   const analysisVM = useAnalysisVM({
@@ -96,12 +121,17 @@ export default function App() {
 
   // Simple navigation helper
   const navigate = (screen, params) => {
-    // Om vi får en profil i params, uppdatera den valda profilen
     if (params?.profile) {
       setSelectedProfile(params.profile);
     }
     if (params?.playbackReport) {
       setSelectedReport(params.playbackReport);
+    }
+    if (params?.sttReportId) {
+      setSelectedSttReportId(params.sttReportId);
+    }
+    if (screen === 'Capture') {
+        setCaptureRouteParams(params || {}); // store raw params (returnToProfile, onSaveAnalysis, ...)
     }
     setCurrentScreen(screen);
   };
@@ -116,6 +146,7 @@ export default function App() {
 
    
   return (
+    <AuthProvider user={currentUser}>
     <View style={{ flex: 1 }}>
       {currentScreen === 'Home' && (
         <HomeView navigate={navigate} />
@@ -139,11 +170,15 @@ export default function App() {
             params: {
               profile: selectedProfile,
               onUpdate: (updated) => {
+                if (!updated || !updated.id) {
+                  return;
+                }
                 setProfiles(prev =>
                   prev.map(p => (p.id === updated.id ? updated : p)),
                 );
-                setSelectedProfile(updated); 
+                setSelectedProfile(updated);
               },
+
             },
           }}
           navigation={{ 
@@ -177,20 +212,26 @@ export default function App() {
         />
       )}
     
-      {currentScreen === 'Capture' && (
-        <CaptureScreen 
-          navigation={{ navigate, goBack }} 
+    {currentScreen === 'STTReportDetail' && selectedSttReportId && (
+        <STTReportDetailView
+          navigation={{
+            goBack: () => setCurrentScreen('Profile'),
+            navigate,
+          }}
+          route={{ params: { reportId: selectedSttReportId } }}
+        />
+      )}
+
+      {currentScreen === 'Capture' && captureRouteParams && (
+        <CaptureScreen
+          navigation={{ navigate, goBack }}
           vm={captureVM}
-          route={{ 
-            params: { 
-              returnToProfile: selectedProfile,
-              onSaveAnalysis: addAnalysisToProfile 
-            } 
-          }} 
+          route={{ params: captureRouteParams }}
         />
       )}
 
 
     </View>
+    </AuthProvider>
   );
 }

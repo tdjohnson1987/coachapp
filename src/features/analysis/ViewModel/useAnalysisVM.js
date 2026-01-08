@@ -1,6 +1,8 @@
 // src/features/analysis/ViewModel/useAnalysisVM.js
 import { useState } from 'react';
 import AnalysisService from '../Model/AnalysisService';
+import STTAnalysisService from '../Model/STTAnalysisService';
+
 
 export const useAnalysisVM = (context) => {
   const [videoFile, setVideoFile] = useState(null);
@@ -15,6 +17,8 @@ export const useAnalysisVM = (context) => {
   const [captureNotes, setCaptureNotes] = useState([]);
   const [keyFrames, setKeyFrames] = useState([]);
 
+  const [sttReports, setSttReports] = useState([]);
+  const [sttLoading, setSttLoading] = useState(false);
   const [currentAthleteId, setCurrentAthleteId] = useState(null);
   const [currentCoachId, setCurrentCoachId] = useState(null);
 
@@ -60,6 +64,40 @@ export const useAnalysisVM = (context) => {
     return built;
   };
 
+  const generateSTTFromSnapshot = async ({ profile, snapshot }) => {
+    if (!currentAthleteId || !currentCoachId) return null;
+    setSttLoading(true);
+    try {
+      const transcription = await STTAnalysisService.transcribeAudioFile(snapshot.audioUri);
+      const report = STTAnalysisService.buildFromDrawingSnapshot({
+        coachId: currentCoachId,
+        athleteId: currentAthleteId,
+        profileName: profile?.name,
+        snapshot,
+        transcription,
+      });
+      const saved = await STTAnalysisService.persist(report);
+      return saved; 
+    } finally {
+      setSttLoading(false);
+    }
+  };
+
+  const loadSTTReportsForAthlete = async (athleteId) => {
+    setSttLoading(true);
+    try {
+      const list = await STTAnalysisService.getReportsForAthlete(athleteId);
+      setSttReports(list);
+      return list;
+    } finally {
+      setSttLoading(false);
+    }
+  };
+
+  const loadSTTReport = async (reportId) => {
+    return STTAnalysisService.getReportById(reportId);
+  };
+
   const toggleFrameSelection = (frameId) => {
     setSelectedFrames((prev) =>
       prev.includes(frameId) ? prev.filter((id) => id !== frameId) : [...prev, frameId],
@@ -100,5 +138,12 @@ export const useAnalysisVM = (context) => {
     addCaptureNote,
     addKeyFrame,
     generateAndSaveReport,
+
+      // STT
+    generateSTTFromSnapshot,
+    loadSTTReportsForAthlete,
+    loadSTTReport,
+    sttReports,
+    sttLoading,
   };
 };

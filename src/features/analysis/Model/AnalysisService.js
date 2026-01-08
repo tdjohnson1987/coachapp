@@ -32,8 +32,8 @@ const AnalysisService = {
     return frames;
   },
 
-  async runSpeechToText(audioBlob) {
-    const result = await transcribeAudio(audioBlob);
+  async runSpeechToText(audioUri) {
+    const result = await transcribeAudio(audioUri);
     return {
       fullText: result?.text || '',
       segments: result?.segments ?? [],
