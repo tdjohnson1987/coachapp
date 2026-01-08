@@ -155,9 +155,23 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
         {
           text: 'Video',
           onPress: () =>
-            navigation.navigate('VideoAnalysis', {
+            navigation.navigate("VideoAnalysis", {
               returnToProfile: editData,
-            }),
+              onSaveAnalysis: async (profileId, snapshot) => {
+                // 1. Skapa den uppdaterade profilen lokalt för UI-respons
+                const updatedProfile = { 
+                  ...editData, 
+                  reports: [snapshot, ...(editData.reports || [])] 
+                };
+                
+                // 2. Uppdatera lokala statet i ProfileView
+                setEditData(updatedProfile);
+                
+                // 3. SKICKA TILL APP.JS (Detta är det som faktiskt SPARAR på disken!)
+                // Denna anropar 'addAnalysisToProfile' i App.js som i sin tur triggar useEffect -> AsyncStorage
+                route.params.onUpdate(updatedProfile); 
+              }
+            })
         },
         {
           text: 'Cancel',

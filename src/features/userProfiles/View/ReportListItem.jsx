@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 const ReportListItem = ({ report, onPress, onLongPress }) => {
     // Priority: 1. Custom Title, 2. Type, 3. Fallback string
     const displayTitle = report?.title || report?.type || "Untitled Analysis";
-    
+    const isVideo = report.type === "Video Drawing Analysis";
     const isDrawing = report?.type?.toLowerCase().includes("drawing");
 
     return (
@@ -17,9 +17,9 @@ const ReportListItem = ({ report, onPress, onLongPress }) => {
         >
             <View style={styles.reportIconWrapper}>
                 <Ionicons 
-                    name={isDrawing ? "brush" : "videocam"} 
+                    name={isVideo ? "videocam" : (isDrawing ? "brush" : "analytics")} 
                     size={20} 
-                    color="#007AFF" 
+                    color={isVideo ? "#5856D6" : "#007AFF"} 
                 />
             </View>
             

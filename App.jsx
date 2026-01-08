@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 
 import HomeView from './src/features/home/HomeView';
 import ProfileSelectionView from './src/features/userProfiles/View/ProfileSelectionView';
@@ -37,6 +38,9 @@ export default function App() {
   useEffect(() => {
     const loadCurrentUser = async () => {
       try {
+        // --- LÄGG TILL DENNA RAD HÄR ---
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+
         const stored = await AsyncStorage.getItem('@coachapp_current_user');
         if (stored) {
           setCurrentUser(JSON.parse(stored));
@@ -71,10 +75,11 @@ export default function App() {
 
     setProfiles((prev) => prev.map((p) => {
       if (p.id === profileId) {
+        // Lägg till den nya video-analysen överst i listan
         const updatedReports = [analysisWithId, ...(p.reports || [])];
         const updatedUser = { ...p, reports: updatedReports };
         
-        // Synka vald profil direkt så listan uppdateras i vyn
+        // Uppdatera statet direkt så den syns på skärmen
         setSelectedProfile(updatedUser);
         return updatedUser;
       }
@@ -197,7 +202,13 @@ export default function App() {
         <VideoAnalyzerView 
           navigation={{ navigate }} 
           vm={analysisVM} 
-          route={{ params: { returnToProfile: selectedProfile } }} 
+          route={{ 
+            params: { 
+              returnToProfile: selectedProfile,
+              // DENNA RAD ÄR VIKTIG:
+              onSaveAnalysis: (id, snapshot) => addAnalysisToProfile(id, snapshot) 
+            } 
+          }} 
         />
       )}
 

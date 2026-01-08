@@ -100,9 +100,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
               type: "Video Drawing Analysis",
               date: new Date().toLocaleDateString(),
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-
-              videoUri: videoFile.uri,
-              videoMeta: videoMeta,
+              videoUri: videoFile.uri, // Dubbelkolla att denna inte är tom!
               recordedEvents: [...(videoDrawing.recordedEvents || [])],
               clipRange: range,
               canvasSize: screen.canvasSize,
@@ -110,10 +108,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
             const onSave = route?.params?.onSaveAnalysis;
             if (onSave) {
-              onSave(returnProfile.id, analysisSnapshot);
-
-              await videoDrawing.clearAll?.();
-              navigation.navigate("Profile", { profile: returnProfile });
+              onSave(returnProfile.id, analysisSnapshot); // Här skickas datan tillbaka till ProfileView
+              navigation.navigate("Profile"); 
             }
           },
         },

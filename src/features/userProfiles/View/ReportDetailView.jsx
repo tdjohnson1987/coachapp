@@ -1,81 +1,117 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
+
 import useCaptureVM from "../../capture/ViewModel/useCaptureVM";
+import useVideoAnalyserScreenVM from "../../analysis/ViewModel/useVideoAnalyserScreenVM";
+import { useAnalysisVM } from "../../analysis/ViewModel/useAnalysisVM";
+import DrawingCanvas from "../../../components/drawing/DrawingCanvas";
 import AnalysisCanvas from "../../shared/AnalysisCanvas";
 
 const ReportDetailView = ({ route, navigation }) => {
   const { playbackReport } = route.params;
-  const vm = useCaptureVM();
+  const isVideoAnalysis = playbackReport?.type === "Video Drawing Analysis";
 
-  // Load the recording immediately when opening the screen
+  // Motor 1: För Video
+  const analysisVM = useAnalysisVM({ coachId: 1, athleteId: 2 });
+  const videoVM = useVideoAnalyserScreenVM({ analysisVM });
+
+  // Motor 2: För Capture (Grön plan)
+  const captureVM = useCaptureVM();
+
   useEffect(() => {
-    if (playbackReport) {
-      vm.loadSavedReport(playbackReport);
+    if (!playbackReport) return;
+
+    if (isVideoAnalysis) {
+      // Ladda motorn för video
+      analysisVM.loadVideo({
+        uri: playbackReport.videoUri,
+        name: playbackReport.title,
+      });
+      if (videoVM.videoDrawing) {
+        videoVM.videoDrawing.recordedEvents = playbackReport.recordedEvents || [];
+        videoVM.videoDrawing.setClipRange?.(playbackReport.clipRange);
+      }
+    } else {
+      // Ladda motorn för Capture
+      captureVM.loadSavedReport(playbackReport);
     }
-    
-    // Clear VM when leaving the view to ensure a fresh state
-    return () => vm.resetVM();
   }, [playbackReport]);
+
+  const handleTogglePlay = () => {
+    if (isVideoAnalysis) {
+      videoVM.togglePlayback();
+    } else {
+      captureVM.isPlaying ? captureVM.stopPlayback() : captureVM.startPlayback();
+    }
+  };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {playbackReport.title || "Analysis Playback"}
-        </Text>
-        {/* Spacer for header balance */}
+        <Text style={styles.headerTitle}>{playbackReport?.title || "Analys"}</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.dateText}>
-          {playbackReport.date} • {playbackReport.time}
-        </Text>
-        
-        {/* Video Area (Pitch Wrapper) */}
         <View 
           style={styles.pitchWrapperDetail}
           onLayout={(e) => {
             const { width, height } = e.nativeEvent.layout;
-            vm.setCanvasSize({ w: width, h: height });
+            isVideoAnalysis ? videoVM.setCanvasSize({ w: width, h: height }) : captureVM.setCanvasSize({ w: width, h: height });
           }}
         >
-          {/* 1. Base Background (Green color as in Capture) */}
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0B6E3A' }]} />
-
-          {/* 2. Background Image - Fixed to prevent top-left corner zoom */}
-          {playbackReport.activeImageSource && (
-            <Image 
-              key={`bg-${playbackReport.id}`}
-              source={playbackReport.activeImageSource} 
-              style={styles.imageFix} 
-              resizeMode="contain" 
-            />
-          )}
-          
-          {/* 3. Canvas Layer for drawings */}
-          {vm.canvasSize.w > 1 && (
-            <AnalysisCanvas 
-              allToRender={vm.allToRender} 
-              canvasSize={vm.canvasSize} 
-              getArrowHead={vm.getArrowHead}
-            />
+          {isVideoAnalysis ? (
+            <>
+              {/* VIDEO-VY */}
+              <Video
+                ref={videoVM.videoRef}
+                source={{ uri: playbackReport.videoUri }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="contain"
+                shouldPlay={videoVM.isPlaying}
+                onPlaybackStatusUpdate={videoVM.onPlaybackStatusUpdate}
+              />
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <DrawingCanvas
+                  strokes={videoVM.strokesForCanvas}
+                  width={videoVM.canvasSize.w}
+                  height={videoVM.canvasSize.h}
+                />
+              </View>
+            </>
+          ) : (
+            <>
+              {/* CAPTURE-VY (Den gröna planen) */}
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0B6E3A' }]} />
+              {playbackReport.activeImageSource && (
+                <Image source={playbackReport.activeImageSource} style={styles.imageFix} resizeMode="contain" />
+              )}
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <AnalysisCanvas 
+                  allToRender={captureVM.allToRender} 
+                  canvasSize={captureVM.canvasSize} 
+                  getArrowHead={captureVM.getArrowHead}
+                />
+              </View>
+            </>
           )}
         </View>
 
-        {/* Controls */}
         <TouchableOpacity 
-          style={[styles.playButton, vm.isPlaying && styles.stopButton]} 
-          onPress={vm.isPlaying ? vm.stopPlayback : vm.startPlayback}
+          style={[styles.playBtn, (videoVM.playbackArmed || captureVM.isPlaying) && styles.stopBtn]} 
+          onPress={handleTogglePlay}
         >
-          <Ionicons name={vm.isPlaying ? "square" : "play"} size={24} color="#FFF" />
-          <Text style={styles.playButtonText}>
-            {vm.isPlaying ? "Stop" : "Play Video"}
+          <Ionicons 
+            name={(videoVM.playbackArmed || captureVM.isPlaying) ? "square" : "play"} 
+            size={24} color="#FFF" 
+          />
+          <Text style={styles.playBtnText}>
+            {(videoVM.playbackArmed || captureVM.isPlaying) ? "Stoppa" : "Spela analys"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -84,71 +120,15 @@ const ReportDetailView = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F8F9FA' 
-  },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    paddingTop: 60, 
-    paddingBottom: 20, 
-    backgroundColor: '#FFF' 
-  },
-  headerTitle: { 
-    fontSize: 18, 
-    fontWeight: '800' 
-  },
-  card: { 
-    margin: 20, 
-    padding: 20, 
-    backgroundColor: '#FFF', 
-    borderRadius: 25, 
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5 
-  },
-  dateText: { 
-    color: '#6C757D', 
-    marginBottom: 15, 
-    fontWeight: '600' 
-  },
-  pitchWrapperDetail: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#0B6E3A',
-    position: 'relative',
-  },
-  imageFix: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    top: 0,
-    left: 0,
-  },
-  playButton: { 
-    flexDirection: 'row', 
-    backgroundColor: '#007AFF', 
-    marginTop: 20, 
-    padding: 15, 
-    borderRadius: 12, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    gap: 10 
-  },
-  stopButton: { 
-    backgroundColor: '#FF3B30' 
-  },
-  playButtonText: { 
-    color: '#FFF', 
-    fontWeight: '800', 
-    fontSize: 16 
-  },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, backgroundColor: '#FFF' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
+  card: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, elevation: 3 },
+  pitchWrapperDetail: { width: '100%', aspectRatio: 16 / 9, borderRadius: 15, overflow: 'hidden', backgroundColor: '#000' },
+  imageFix: { width: '100%', height: '100%' },
+  playBtn: { flexDirection: 'row', backgroundColor: '#007AFF', marginTop: 20, padding: 15, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  stopBtn: { backgroundColor: '#FF3B30' },
+  playBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' }
 });
 
 export default ReportDetailView;
