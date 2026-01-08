@@ -1,4 +1,3 @@
-// src/features/analysis/Model/ReportModel.js
 const createReport = ({
   coachId,
   athleteId,
@@ -14,10 +13,10 @@ const createReport = ({
   videoSourceId: videoMeta?.id || null,
   videoMeta: videoMeta || null,
 
-  transcription,           // { fullText, segments: [...] }
+  transcription,
 
-  captureNotes,            // [{ id, imageUri, text }]
-  keyFrames,               // [{ id, time, imageUri, strokes, note }]
+  captureNotes,
+  keyFrames,
 
   sport: videoMeta?.sport || null,
 });
