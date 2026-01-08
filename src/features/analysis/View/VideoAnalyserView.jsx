@@ -14,10 +14,7 @@ import DrawingCanvas from "../../../components/drawing/DrawingCanvas";
 import DrawingToolbar from "../../../components/drawing/DrawingToolbar";
 import useVideoAnalyserScreenVM from "../ViewModel/useVideoAnalyserScreenVM.js";
 
-
-
 const VideoAnalyzerView = ({ navigation, vm, route }) => {
-
   const screen = useVideoAnalyserScreenVM({ analysisVM: vm });
   const videoDrawing = screen.videoDrawing;
 
@@ -38,14 +35,10 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
     report,
     loading,
     error,
-    loadVideo,
     toggleFrameSelection,
-    addKeyFrame,
   } = vm;
 
-
   const d = videoDrawing?.drawing;
-
 
   // Adapter för DrawingToolbar + touch-layer
   const drawApi = d
@@ -81,7 +74,6 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
 
   const clipReady = screen.clipReady;
 
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -93,9 +85,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         <View style={{ alignItems: "center" }}>
           <Text style={styles.headerTitle}>Video Analysis</Text>
           {profile && (
-            <Text
-              style={{ fontSize: 12, color: "#666", fontWeight: "600" }}
-            >
+            <Text style={{ fontSize: 12, color: "#666", fontWeight: "600" }}>
               Analyserar: {profile.name}
             </Text>
           )}
@@ -115,13 +105,16 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         {/* Video card */}
         <View style={styles.card}>
           <Text style={styles.label}>Videokälla</Text>
+
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={screen.handlePickVideo}          >
+            onPress={screen.handlePickVideo}
+          >
             <Text style={styles.primaryButtonText}>
               {videoMeta ? "Byt video" : "Välj video"}
             </Text>
           </TouchableOpacity>
+
           <Text style={styles.helperText}>
             {videoMeta ? videoMeta.name : "Ingen video vald ännu"}
           </Text>
@@ -159,39 +152,28 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                     shouldPlay={screen.isPlaying}
                     useNativeControls={false}
                     onPlaybackStatusUpdate={screen.onPlaybackStatusUpdate}
-
-
                   />
                 )}
 
                 {/* Drawing overlay */}
-                <View
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                >
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
                   <DrawingCanvas
                     strokes={screen.strokesForCanvas}
                     width={screen.canvasSize.w}
                     height={screen.canvasSize.h}
                   />
                 </View>
-
-
               </>
             ) : (
               <View style={styles.videoPlaceholder}>
-                <Ionicons
-                  name="videocam-outline"
-                  size={40}
-                  color="#ADB5BD"
-                />
+                <Ionicons name="videocam-outline" size={40} color="#ADB5BD" />
                 <Text style={styles.placeholderText}>
                   Välj en video för att börja analysera
                 </Text>
               </View>
             )}
 
-            {/* Touch-layer för ritning (alltid på när video finns) */}
+            {/* Touch-layer för ritning */}
             {!!videoFile && !!drawApi?.panHandlers && (
               <View
                 style={[StyleSheet.absoluteFill, { zIndex: 50 }]}
@@ -204,32 +186,35 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           {/* Meta + clear */}
           <View style={styles.inlineRow}>
             <Text style={styles.metaText}>
-              {videoMeta
-                ? `${Math.round(videoMeta.size / 1024 / 1024)} MB`
-                : ""}
+              {videoMeta ? `${Math.round(videoMeta.size / 1024 / 1024)} MB` : ""}
             </Text>
 
-            <TouchableOpacity onPress={drawApi?.clear} disabled={!videoFile || !drawApi}>
-              <Text style={[styles.clearText, (!videoFile || !drawApi) && styles.clearTextDisabled]}>
+            <TouchableOpacity
+              onPress={drawApi?.clear}
+              disabled={!videoFile || !drawApi}
+            >
+              <Text
+                style={[
+                  styles.clearText,
+                  (!videoFile || !drawApi) && styles.clearTextDisabled,
+                ]}
+              >
                 Rensa ritning
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Controls: REC + PLAYBACK + PLAY + RESET */}
+          {/* Controls */}
           <View style={styles.controlsRow}>
             <TouchableOpacity
               style={[
                 styles.controlBtn,
-                {
-                  backgroundColor: videoDrawing.isRecording
-                    ? "#DC3545"
-                    : "#34C759",
-                },
+                { backgroundColor: videoDrawing.isRecording ? "#DC3545" : "#34C759" },
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
-              onPress={screen.toggleRecording}            >
+              onPress={screen.toggleRecording}
+            >
               <Text style={styles.controlBtnText}>
                 {videoDrawing.isRecording ? "STOP REC" : "REC"}
               </Text>
@@ -242,7 +227,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 !clipReady && styles.controlBtnDisabled,
               ]}
               disabled={!clipReady}
-              onPress={screen.togglePlayback}            >
+              onPress={screen.togglePlayback}
+            >
               <Text style={styles.controlBtnText}>
                 {(screen.playbackArmed || videoDrawing.isPlayback) ? "STOP" : "PLAYBACK"}
               </Text>
@@ -255,8 +241,11 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
                 !videoFile && styles.controlBtnDisabled,
               ]}
               disabled={!videoFile}
-              onPress={screen.togglePlay}            >
-              <Text style={styles.controlBtnText}>{screen.isPlaying ? "PAUSE" : "PLAY"}</Text>
+              onPress={screen.togglePlay}
+            >
+              <Text style={styles.controlBtnText}>
+                {screen.isPlaying ? "PAUSE" : "PLAY"}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -289,6 +278,7 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
         {/* Key frames + status */}
         <View style={styles.card}>
           <Text style={styles.label}>Nyckelframes</Text>
+
           {frames.length === 0 ? (
             <Text style={styles.helperText}>
               Inga frames ännu (kommer från analys-steget).
@@ -313,12 +303,8 @@ const VideoAnalyzerView = ({ navigation, vm, route }) => {
           <Text style={styles.statusText}>
             Rapport: {report ? "Skapad" : "Ej skapad"}
           </Text>
-          {loading && (
-            <Text style={styles.statusText}>Bearbetar...</Text>
-          )}
-          {error && (
-            <Text style={styles.errorText}>{String(error)}</Text>
-          )}
+          {loading && <Text style={styles.statusText}>Bearbetar...</Text>}
+          {error && <Text style={styles.errorText}>{String(error)}</Text>}
         </View>
       </View>
     </View>
@@ -393,7 +379,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
-
 
   inlineRow: {
     flexDirection: "row",
