@@ -138,32 +138,36 @@ export default function useVideoAnalyserScreenVM({ analysisVM }) {
         if (!videoFile) return;
 
         if (Platform.OS === "web") {
+            setIsPlaying((p) => !p);
             return;
         }
 
         try {
-            const posMs = await getVideoPosMs();
-            const t = videoDrawing.getTimelineNow?.() ?? 0;
-
-            if (videoDrawing.isRecording) {
-                videoDrawing.pushMetaEvent?.({
-                    type: isPlaying ? "video-pause" : "video-play",
-                    t,
-                    posMs,
-                });
-            }
+            const st = await videoRef.current?.getStatusAsync?.();
+            if (!st?.isLoaded) return;
 
             if (isPlaying) {
                 await videoRef.current?.pauseAsync?.();
                 setIsPlaying(false);
-            } else {
-                await videoRef.current?.playAsync?.();
-                setIsPlaying(true);
+                return;
             }
+
+            const nearEnd =
+                typeof st.durationMillis === "number" &&
+                (st.didJustFinish || (st.positionMillis ?? 0) >= st.durationMillis - 200);
+
+            if (nearEnd) {
+                await videoRef.current?.setPositionAsync?.(0);
+                videoDrawing.setVideoTimeMs?.(0);
+            }
+
+            await videoRef.current?.playAsync?.();
+            setIsPlaying(true);
         } catch (e) {
             console.warn("play/pause failed", e);
         }
     };
+
 
     const toggleRecording = async () => {
         if (!videoFile) return;
