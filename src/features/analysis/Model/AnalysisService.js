@@ -41,14 +41,26 @@ const AnalysisService = {
   },
 
   // Build a full report object from current VM state
-  buildReport({ coachId, athleteId, videoMeta, transcription, captureNotes, keyFrames }) {
+  buildReport({ 
+    athleteId, 
+    videoMeta, 
+    transcription, 
+    captureNotes, 
+    keyFrames,
+    videoUri,        // LÄGG TILL
+    recordedEvents,  // LÄGG TILL
+    clipRange        // LÄGG TILL
+  }) {
     return createReport({
-      coachId,
       athleteId,
       videoMeta,
       transcription,
       captureNotes,
       keyFrames,
+      videoUri,        // SKICKA MED
+      recordedEvents,  // SKICKA MED
+      clipRange,       // SKICKA MED
+      type: "Video Drawing Analysis", // TVINGA TYPEN HÄR
     });
   },
 

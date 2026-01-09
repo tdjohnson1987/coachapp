@@ -3,6 +3,12 @@ import { Audio } from "expo-av";
 import useDrawingVM from "../../../components/drawing/useDrawingVM";
 
 export default function useVideoDrawingVM() {
+    const setRecordedEventsManual = (evts) => setRecordedEvents(evts || []);
+    const setClipRangeManual = (range) => {
+        // VIKTIGT: Dessa refs används av togglePlayback för att veta start/stopp
+        clipStartMsRef.current = range?.startMs ?? 0;
+        clipEndMsRef.current = range?.endMs ?? 0;
+    };
     const [videoTimeAbsMs, setVideoTimeAbsMs] = useState(0);
     const videoTimeAbsRef = useRef(0);
 
@@ -325,7 +331,8 @@ export default function useVideoDrawingVM() {
         audioUri,
         strokesToRender,
 
-
+        setRecordedEventsManual,
+        setClipRangeManual,
         getClipRange,
         setVideoTimeMs,
         startRecording,

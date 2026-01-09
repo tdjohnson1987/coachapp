@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useEffect, useState } from 'react';
+// Lade till ActivityIndicator här:
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -11,41 +12,77 @@ import AnalysisCanvas from "../../shared/AnalysisCanvas";
 
 const ReportDetailView = ({ route, navigation }) => {
   const { playbackReport } = route.params;
-  const isVideoAnalysis = playbackReport?.type === "Video Drawing Analysis";
+  const [isReady, setIsReady] = useState(false);
+  const [dataApplied, setDataApplied] = useState(false);
+  
+  const isVideoAnalysis = playbackReport?.type?.includes("Video") || !!playbackReport?.videoUri;
+  const currentProfileId = playbackReport?.profileId || playbackReport?.athleteId;
 
-  // Motor 1: För Video
-  const analysisVM = useAnalysisVM({ coachId: 1, athleteId: 2 });
+  const analysisVM = useAnalysisVM({ athleteId: currentProfileId });
   const videoVM = useVideoAnalyserScreenVM({ analysisVM });
-
-  // Motor 2: För Capture (Grön plan)
   const captureVM = useCaptureVM();
 
-  useEffect(() => {
-    if (!playbackReport) return;
+  // 1. Denna funktion bevakar videons status och injicerar data när den är "Loaded"
+  const onPlaybackStatusUpdate = async (status) => {
+    videoVM.onPlaybackStatusUpdate(status);
 
-    if (isVideoAnalysis) {
-      // Ladda motorn för video
-      analysisVM.loadVideo({
-        uri: playbackReport.videoUri,
-        name: playbackReport.title,
-      });
+    if (status.isLoaded && !dataApplied) {
+      console.log("Video status: LOADED. Injecting data...");
+      
       if (videoVM.videoDrawing) {
-        videoVM.videoDrawing.recordedEvents = playbackReport.recordedEvents || [];
-        videoVM.videoDrawing.setClipRange?.(playbackReport.clipRange);
+        // Tvinga in datan direkt i refs
+        videoVM.videoDrawing.setRecordedEventsManual?.(playbackReport.recordedEvents || []);
+        videoVM.videoDrawing.setClipRangeManual?.(playbackReport.clipRange);
+        
+        const startPos = playbackReport.clipRange?.startMs || 0;
+        await videoVM.videoRef.current?.setPositionAsync(startPos);
+        videoVM.videoDrawing.setVideoTimeMs?.(startPos);
       }
-    } else {
-      // Ladda motorn för Capture
-      captureVM.loadSavedReport(playbackReport);
+      setDataApplied(true);
     }
+  };
+
+  useEffect(() => {
+    async function setup() {
+      if (!playbackReport) return;
+      if (isVideoAnalysis) {
+        // Ladda videofilen i motorn
+        await analysisVM.loadVideo({
+          uri: playbackReport.videoUri,
+          name: playbackReport.title,
+        });
+      } else {
+        captureVM.loadSavedReport(playbackReport);
+      }
+      setIsReady(true);
+    }
+    setup();
   }, [playbackReport]);
 
-  const handleTogglePlay = () => {
+  const handleTogglePlay = async () => {
     if (isVideoAnalysis) {
-      videoVM.togglePlayback();
+      // SÄKERHETS-CHECK: Om VM:en tappat sitt range, tvinga in det igen precis innan start
+      const currentRange = videoVM.videoDrawing.getClipRange();
+      if (!currentRange || typeof currentRange.startMs !== 'number') {
+        console.log("Range saknades i VM, tvingar in från rapport...");
+        videoVM.videoDrawing.setClipRangeManual(playbackReport.clipRange);
+      }
+      
+      // Anropa den faktiska uppspelningslogiken
+      await videoVM.togglePlayback();
     } else {
       captureVM.isPlaying ? captureVM.stopPlayback() : captureVM.startPlayback();
     }
   };
+
+  if (!isReady) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={{ marginTop: 10 }}>Laddar analys...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -67,14 +104,13 @@ const ReportDetailView = ({ route, navigation }) => {
         >
           {isVideoAnalysis ? (
             <>
-              {/* VIDEO-VY */}
               <Video
                 ref={videoVM.videoRef}
                 source={{ uri: playbackReport.videoUri }}
+                onPlaybackStatusUpdate={onPlaybackStatusUpdate}
                 style={StyleSheet.absoluteFill}
                 resizeMode="contain"
                 shouldPlay={videoVM.isPlaying}
-                onPlaybackStatusUpdate={videoVM.onPlaybackStatusUpdate}
               />
               <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <DrawingCanvas
@@ -86,7 +122,6 @@ const ReportDetailView = ({ route, navigation }) => {
             </>
           ) : (
             <>
-              {/* CAPTURE-VY (Den gröna planen) */}
               <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0B6E3A' }]} />
               {playbackReport.activeImageSource && (
                 <Image source={playbackReport.activeImageSource} style={styles.imageFix} resizeMode="contain" />
@@ -121,6 +156,7 @@ const ReportDetailView = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, backgroundColor: '#FFF' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
   card: { margin: 20, padding: 15, backgroundColor: '#FFF', borderRadius: 20, elevation: 3 },
