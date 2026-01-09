@@ -18,6 +18,8 @@ import { useProfileVM } from '../ViewModel/useProfileVM';
 import { useAnalysisVM } from '../../analysis/ViewModel/useAnalysisVM';
 import { useAuth } from '../../../context/AuthContext';
 
+
+
 const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
   const { profile, onUpdate } = route.params;
 
@@ -37,6 +39,17 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
     if (!editData?.id || !coachId) return;
     analysisVM.useProfileForAnalysis(coachId, editData.id);
   }, [analysisVM, coachId, editData?.id]);
+
+  useEffect(() => {
+    const id = editData?.id || profile?.id;
+    if (!id) return;
+
+    const latest = profiles?.find(p => p.id === id);
+    if (latest) {
+      setEditData(latest);
+    }
+  }, [profiles, profile?.id]);
+
 
   const handleOpenReports = () => {
     navigation.navigate('ReportGenerator', { profile: editData });
@@ -161,6 +174,8 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
       ]
     );
   };
+
+
 
 
 
