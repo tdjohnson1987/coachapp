@@ -90,96 +90,79 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
   };
 
   const handleCreateAnalysis = () => {
+    const onSaveAnalysis = async (profileId, snapshot) => {
+      setEditData(prev => {
+        const next = {
+          ...prev,
+          reports: [...(prev?.reports || []), snapshot],
+        };
+        onUpdate(next);
+        return next;
+      });
+
+      try {
+        const sttReport = await analysisVM.generateSTTFromSnapshot({
+          profile: { id: profileId },
+          snapshot,
+        });
+
+        if (!sttReport) return;
+
+        const realId = sttReport.reportId || sttReport.id;
+        if (!realId) return;
+
+        const sttSummary = {
+          id: `stt-${realId}-${Date.now()}`,
+          sttReportId: realId,
+          title: sttReport.title || snapshot.title,
+          type: "Drawing+STT",
+          date: snapshot.date,
+          time: snapshot.time,
+          preview: sttReport.transcription?.fullText?.slice(0, 80) || "",
+        };
+
+        setEditData(prev => {
+          const already = (prev?.reports || []).some(r => r?.sttReportId === realId);
+          if (already) return prev;
+
+          const next = {
+            ...prev,
+            reports: [...(prev?.reports || []), sttSummary],
+          };
+          onUpdate(next);
+          return next;
+        });
+      } catch (e) {
+        console.warn("Failed to generate STT report", e);
+      }
+    };
+
     Alert.alert(
-      'New Analysis',
-      'Would you like to use a picture or a video?',
+      "New Analysis",
+      "Would you like to use a picture or a video?",
       [
         {
-          text: 'Picture',
+          text: "Picture",
           onPress: () =>
-            navigation.navigate('Capture', {
+            navigation.navigate("Capture", {
               returnToProfile: editData,
-              onSaveAnalysis: async (profileId, snapshot) => {
-                // 1) Attach snapshot to profile (local profile reports)
-                const updatedProfile = vm.addReportToProfile
-                  ? vm.addReportToProfile(profileId, snapshot)
-                  : {
-                      ...editData,
-                      reports: [...(editData.reports || []), snapshot],
-                    };
-
-                setEditData(updatedProfile);
-                onUpdate(updatedProfile);
-
-                // 2) Generate STT report
-                try {
-                 const sttReport = await analysisVM.generateSTTFromSnapshot({
-                  profile: updatedProfile,
-                  snapshot,
-                });
-
-                if (!sttReport || !sttReport.id) {
-                  return; // don’t try to use id when STT failed
-                }
-                const realId = sttReport.reportId || sttReport.id;
-                if (!realId) {
-                  console.warn('No realId from STT, skipping summary');
-                  return;
-                }
-
-                const sttSummary = {
-                  id: `stt-${realId}-${Date.now()}`,
-                  sttReportId: realId,
-                  title: sttReport.title || snapshot.title,
-                  type: 'Drawing+STT',
-                  date: snapshot.date,
-                  time: snapshot.time,
-                  preview: sttReport.transcription?.fullText?.slice(0, 80) || '',
-                };
-
-                const updatedWithSTT = {
-                  ...updatedProfile,
-                  reports: [...(updatedProfile.reports || []), sttSummary],
-                };
-
-                setEditData(updatedWithSTT);
-                onUpdate(updatedWithSTT);
-
-
-              } catch (e) {
-                console.warn('Failed to generate STT report', e);
-              }
-              },
+              onSaveAnalysis,
             }),
         },
         {
-          text: 'Video',
+          text: "Video",
           onPress: () =>
             navigation.navigate("VideoAnalysis", {
               returnToProfile: editData,
-              onSaveAnalysis: async (profileId, snapshot) => {
-                // 1. Skapa den uppdaterade profilen lokalt för UI-respons
-                const updatedProfile = { 
-                  ...editData, 
-                  reports: [snapshot, ...(editData.reports || [])] 
-                };
-                
-                // 2. Uppdatera lokala statet i ProfileView
-                setEditData(updatedProfile);
-                
-                // 3. SKICKA TILL APP.JS (Detta är det som faktiskt SPARAR på disken!)
-                // Denna anropar 'addAnalysisToProfile' i App.js som i sin tur triggar useEffect -> AsyncStorage
-                route.params.onUpdate(updatedProfile); 
-              }
-            })
+              onSaveAnalysis,
+            }),
         },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ],
+        { text: "Cancel", style: "cancel" },
+      ]
     );
   };
+
+
 
   return (
     <View style={styles.container}>
@@ -297,7 +280,7 @@ const ProfileView = ({ route, navigation, profiles, setProfiles }) => {
             <View style={styles.reportsList}>
               {editData?.reports && editData.reports.length > 0 ? (
                 editData.reports.map((report) => (
-                 <ReportListItem
+                  <ReportListItem
                     key={report.id}
                     report={report}
                     onPress={(r) => {
